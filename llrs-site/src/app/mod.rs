@@ -25,13 +25,10 @@ impl Component for App {
     type Properties = ();
 
     fn create(_: Self::Properties, _: ComponentLink<Self>) -> Self {
-        let manga_agent = MangaAgent::dispatcher();
-        let chapter_agent = ChapterAgent::dispatcher();
-        let page_agent = PageAgent::dispatcher();
         Self {
-            manga_agent,
-            chapter_agent,
-            page_agent,
+            manga_agent: MangaAgent::dispatcher(),
+            chapter_agent: ChapterAgent::dispatcher(),
+            page_agent: PageAgent::dispatcher(),
         }
     }
 
@@ -92,7 +89,8 @@ fn render_main_content(route: &AppRoute) -> Html {
                 page_number=1
             />
         },
-        AppRoute::NotFound(Permissive(None)) => html! { not_found("") },
-        AppRoute::NotFound(Permissive(Some(path))) => html! { not_found(&path) },
+        AppRoute::NotFound(Permissive(unknown_path)) => {
+            html! { not_found(unknown_path.as_ref().map_or("", |path| path.as_str())) }
+        }
     }
 }
