@@ -14,7 +14,7 @@ pub struct State {
 
 impl State {}
 
-pub struct Home {
+pub struct MangaList {
     state: State,
 }
 
@@ -23,7 +23,7 @@ pub enum Msg {
     AgentResponse(Response),
 }
 
-impl Component for Home {
+impl Component for MangaList {
     type Message = Msg;
     type Properties = ();
 

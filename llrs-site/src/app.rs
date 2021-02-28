@@ -1,6 +1,6 @@
 use crate::{
     agents::manga::Response as MangaResponse,
-    pages::{ChapterList, Home, MangaPage},
+    pages::{ChapterList, MangaList, MangaPage},
     route::AppRoute,
 };
 use crate::{
@@ -145,8 +145,8 @@ impl Component for AppNavbar {
 
 fn render_main_content(route: &AppRoute) -> Html {
     match route {
-        AppRoute::Home => html! {
-            <Home/>
+        AppRoute::MangaList => html! {
+            <MangaList />
         },
         AppRoute::ChapterList { manga_id } => html! {
             <ChapterList manga_id=manga_id />
@@ -230,19 +230,19 @@ impl AppNavbar {
     // TODO: Use Agents to get names of mangas/chapters
     fn get_brand_links(&self) -> Children {
         let brand_logo = html! {
-            <Anchor classes="navbar-item" route=AppRoute::Home>
+            <Anchor classes="navbar-item" route=AppRoute::MangaList>
                 <img src=&LLRS_BRAND_LOGO_URL alt="llrs logo" />
             </Anchor>
         };
         // Bulma ONLY formats the text properly with anchors
         let links = match &self.props.route {
-            AppRoute::Home => vec![BreadcrumbLink {
-                route: AppRoute::Home,
+            AppRoute::MangaList => vec![BreadcrumbLink {
+                route: AppRoute::MangaList,
                 link_text: "llrs".to_owned(),
             }],
             AppRoute::ChapterList { manga_id } => vec![
                 BreadcrumbLink {
-                    route: AppRoute::Home,
+                    route: AppRoute::MangaList,
                     link_text: "llrs".to_owned(),
                 },
                 BreadcrumbLink {
@@ -273,7 +273,7 @@ impl AppNavbar {
                 chapter_number,
             } => vec![
                 BreadcrumbLink {
-                    route: AppRoute::Home,
+                    route: AppRoute::MangaList,
                     link_text: "llrs".to_owned(),
                 },
                 BreadcrumbLink {
@@ -302,7 +302,7 @@ impl AppNavbar {
                 },
             ],
             AppRoute::NotFound(Permissive(_)) => vec![BreadcrumbLink {
-                route: AppRoute::Home,
+                route: AppRoute::MangaList,
                 link_text: "llrs".to_owned(),
             }],
         };
