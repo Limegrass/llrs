@@ -9,7 +9,7 @@ use std::{
     cmp::{max, min},
     rc::Rc,
 };
-use web_sys::HtmlImageElement;
+use web_sys::{HtmlImageElement, ScrollBehavior, ScrollToOptions, Window};
 use yew::{agent::Bridge, prelude::*, Component, ComponentLink};
 use yew_router::{
     agent::RouteRequest,
@@ -35,6 +35,7 @@ pub struct MangaPage {
     chapter_agent: Box<dyn Bridge<ChapterAgent>>,
     route_dispatcher: RouteAgentDispatcher,
     prefetcher: Option<HtmlImageElement>,
+    window: Option<Window>,
     state: State,
     props: Props,
     link: ComponentLink<Self>,
@@ -81,6 +82,7 @@ impl Component for MangaPage {
         };
 
         let route_dispatcher = RouteAgentDispatcher::new();
+        let window = web_sys::window();
 
         Self {
             prefetcher: HtmlImageElement::new().ok(),
@@ -90,6 +92,7 @@ impl Component for MangaPage {
             state,
             props,
             link,
+            window,
         }
     }
 
@@ -146,6 +149,7 @@ impl Component for MangaPage {
                 false
             }
             Msg::PageBack => {
+                self.scroll_to_manga_page_top();
                 let current_chapter_number = &self.props.chapter_number;
                 let previous_page_chapter_number = if self.props.page_number == 1 {
                     self.state
@@ -198,6 +202,7 @@ impl Component for MangaPage {
                 }
             }
             Msg::PageForward => {
+                self.scroll_to_manga_page_top();
                 let last_page = self
                     .state
                     .pages
@@ -272,6 +277,22 @@ impl Component for MangaPage {
 
 // Check the Chapter Agent to see which chapter is next
 impl MangaPage {
+    fn scroll_to_manga_page_top(&self) {
+        let mut scroll_to_options = ScrollToOptions::new();
+        let manga_page_top = self.window.as_ref().map_or(0.0, |window| {
+            window.document().map_or(0.0, |doc| {
+                doc.get_element_by_id("manga-image")
+                    .map_or(0.0, |element| element.get_bounding_client_rect().top())
+            })
+        });
+        scroll_to_options.top(manga_page_top);
+        scroll_to_options.behavior(ScrollBehavior::Smooth);
+        self.window.as_ref().and_then(|window| {
+            window.scroll_by_with_scroll_to_options(&scroll_to_options);
+            Some(window)
+        });
+    }
+
     fn render_view(&self, pages: &[Page]) -> Html {
         let page_index = self.props.page_number - 1;
         let pages = match self.state.view_format {
@@ -308,7 +329,8 @@ impl MangaPage {
                     onclick=self.link.callback(|_| Msg::PageBack) />
                 <div class="forward-pager"
                     onclick=self.link.callback(|_| Msg::PageForward) />
-                <img src=&page.url_string
+                <img id="manga-image"
+                     src=&page.url_string
                      alt=format!("Page {} Image", &page.page_number)
                  />
             </div>
