@@ -1,13 +1,5 @@
 use yew::{prelude::*, virtual_dom::VNode};
 
-// #[derive(Debug, Clone, PartialEq, Properties)]
-// pub struct BreadcrumbItem {
-//     pub name: String,
-//     pub icon: Option<Icon>,
-//     pub path: String,
-//     pub is_active: bool,
-// }
-
 pub struct Breadcrumb {
     props: Props,
 }
@@ -70,8 +62,9 @@ impl Component for Breadcrumb {
         true
     }
 
-    fn change(&mut self, _props: Self::Properties) -> ShouldRender {
-        false
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        self.props = props;
+        true
     }
 
     fn view(&self) -> Html {
@@ -80,10 +73,7 @@ impl Component for Breadcrumb {
         html! {
             <nav class=&classes aria-label="breadcrumbs">
                 <ul>
-                {for self.props.children.iter().map(|child| wrap_as_li(child))}
-
-
-
+                    {for self.props.children.iter().map(|child| wrap_as_li(child))}
                 </ul>
             </nav>
         }
