@@ -5,10 +5,9 @@ use crate::agents::{
 use crate::app::AppRoute;
 use llrs_model::{Chapter, Page};
 use log::*;
-use std::{
-    cmp::{max, min},
-    rc::Rc,
-};
+use std::{cmp::max, rc::Rc};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 use web_sys::{HtmlImageElement, ScrollBehavior, ScrollToOptions, Window};
 use yew::{agent::Bridge, prelude::*, Component, ComponentLink};
 use yew_router::{
@@ -21,6 +20,7 @@ pub struct State {
     chapters: Option<Rc<Vec<Chapter>>>,
     view_format: ViewFormat,
     should_set_to_last_page: bool,
+    starting_page_number: Option<usize>,
 }
 
 enum ViewFormat {
@@ -79,6 +79,7 @@ impl Component for MangaPage {
             pages: None,
             view_format: ViewFormat::Single,
             should_set_to_last_page: false,
+            starting_page_number: None,
         };
 
         let route_dispatcher = RouteAgentDispatcher::new();
@@ -122,6 +123,7 @@ impl Component for MangaPage {
                     };
                     self.route_dispatcher
                         .send(RouteRequest::ChangeRoute(Route::from(route)));
+                    self.state.starting_page_number = Some(self.props.page_number);
                     self.state.pages = Some(data);
                     false
                 } else {
@@ -130,15 +132,41 @@ impl Component for MangaPage {
                 }
             }
             Msg::PreloadNextImage { page_number } => {
-                let url = self
-                    .state
-                    .pages
-                    .as_ref()
-                    .map(|pages| pages[page_number - 1].url_string.as_str())
-                    .unwrap_or("");
+                if let Some(pages) = self.state.pages.as_ref() {
+                    if pages.len() > 0 {
+                        if let Some(page_index) = page_number
+                            .checked_sub(1)
+                            .map(|res| {
+                                if res < pages.len() {
+                                    Some(res)
+                                } else if res == self.state.starting_page_number.unwrap_or(res) {
+                                    None
+                                } else {
+                                    res.checked_sub(pages.len())
+                                }
+                            })
+                            .unwrap_or(None)
+                        // will never become None here as we never pass 0 as page_number
+                        {
+                            if let Some(page) = pages.get(page_index) {
+                                if let Some(image_element) = &self.prefetcher {
+                                    let link = self.link.clone();
+                                    let load_next_image = Closure::once(Box::new(move || {
+                                        link.send_message(Msg::PreloadNextImage {
+                                            page_number: page_number + 1,
+                                        });
+                                    }));
+                                    image_element
+                                        .set_onload(Some(load_next_image.as_ref().unchecked_ref()));
+                                    load_next_image.forget();
 
-                if let Some(image_element) = &self.prefetcher {
-                    image_element.set_src(url);
+                                    image_element.set_src(&page.url_string);
+                                }
+                            }
+                        } else {
+                            self.state.starting_page_number = None;
+                        }
+                    }
                 }
 
                 false
@@ -312,16 +340,7 @@ impl MangaPage {
     }
 
     fn manga_page(&self, page: &Page) -> Html {
-        // TODO: Look into an alternative to format!
-        self.link.send_message(Msg::PreloadNextImage {
-            page_number: min(
-                page.page_number as usize,
-                self.state
-                    .pages
-                    .as_ref()
-                    .map_or(page.page_number as usize, |pages| pages.len()),
-            ),
-        });
+        let next_page_number = page.page_number as usize + 1;
 
         html! {
             <div class="container">
@@ -331,6 +350,9 @@ impl MangaPage {
                     onclick=self.link.callback(|_| Msg::PageForward) />
                 <img id="manga-image"
                      src=&page.url_string
+                     onload=self.link.callback(move |_| Msg::PreloadNextImage {
+                         page_number: next_page_number
+                     })
                      alt=format!("Page {} Image", &page.page_number)
                  />
             </div>
