@@ -58,25 +58,42 @@ impl Component for ChapterList {
     fn view(&self) -> Html {
         match &self.state.chapters {
             Some(chapters) => html! {
-                for chapters.iter().map(|val| self.chapter_entry(&val))
+                <table class="table is-striped is-narrow is-fullwidth">
+                    <tr>
+                        <td> { "Chapter Number" } </td>
+                        <td> { "Chapter Name" } </td>
+                    </tr>
+                    {for chapters.iter().map(|val| self.chapter_entry(&val))}
+                </table>
             },
             None => html! {"Fetching"},
         }
     }
 }
 
+// TODO: Search bar, set is-selected for most recent chapter if same manga
 impl ChapterList {
     fn chapter_entry(&self, chapter: &Chapter) -> Html {
         type Anchor = RouterAnchor<AppRoute>;
         html! {
-            <div class="chapter">
-                <Anchor route=AppRoute::MangaChapter {
-                    manga_id: chapter.manga_id,
-                    chapter_number: chapter.chapter_number.to_owned(),
-                }>
-                    {&chapter.chapter_number}
-                </Anchor>
-            </div>
+            <tr>
+                <td>
+                    <Anchor route=AppRoute::MangaChapter {
+                        manga_id: chapter.manga_id,
+                        chapter_number: chapter.chapter_number.to_owned(),
+                    }>
+                        {"Chapter "}{&chapter.chapter_number}
+                    </Anchor>
+                </td>
+                <td>
+                    <Anchor route=AppRoute::MangaChapter {
+                        manga_id: chapter.manga_id,
+                        chapter_number: chapter.chapter_number.to_owned(),
+                    }>
+                    {&chapter.chapter_name}
+                    </Anchor>
+                </td>
+            </tr>
         }
     }
 }
