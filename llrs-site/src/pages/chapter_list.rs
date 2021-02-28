@@ -68,10 +68,10 @@ impl ChapterList {
         type Anchor = RouterAnchor<AppRoute>;
         html! {
             <div class="chapter">
-                <Anchor route=AppRoute::MangaChapter(
-                        chapter.manga_id,
-                        chapter.chapter_number.to_owned(),
-                        1)>
+                <Anchor route=AppRoute::MangaChapter {
+                    manga_id: chapter.manga_id,
+                    chapter_number: chapter.chapter_number.to_owned(),
+                }>
                     {&chapter.chapter_number}
                 </Anchor>
             </div>

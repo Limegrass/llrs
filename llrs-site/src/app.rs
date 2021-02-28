@@ -3,14 +3,22 @@ use crate::pages::not_found;
 use crate::pages::{ChapterList, Home, MangaPage};
 use log::trace;
 use yew::prelude::*;
-use yew_router::{components::RouterAnchor, prelude::*, switch::Permissive, Switch};
+use yew_router::{prelude::*, switch::Permissive, Switch};
 
 #[derive(Debug, Switch, PartialEq, Clone)]
 pub enum AppRoute {
-    #[to = "/manga/{manga_id}/{chapter_number}/{page}"]
-    MangaChapter(i32, String, u32),
+    #[to = "/manga/{manga_id}/{chapter_number}/{page_number}"]
+    MangaChapterPage {
+        manga_id: i32,
+        chapter_number: String,
+        page_number: usize,
+    },
+    // support users inputting the chapter number manually without a page
     #[to = "/manga/{manga_id}/{chapter_number}"]
-    MangaChapterDefault(i32, String),
+    MangaChapter {
+        manga_id: i32,
+        chapter_number: String,
+    },
     #[to = "/manga/{manga_id}"]
     ChapterList(i32),
     #[to = "/page-not-found"]
@@ -52,14 +60,21 @@ impl Component for App {
                 AppRoute::ChapterList(manga_id) => html! {
                     <ChapterList manga_id=manga_id />
                 },
-                AppRoute::MangaChapter(manga_id, chapter_number, page_number) => html! {
+                AppRoute::MangaChapterPage {
+                    manga_id,
+                    chapter_number,
+                    page_number,
+                } => html! {
                     <MangaPage
                         manga_id=manga_id
                         chapter_number=chapter_number
                         page_number=page_number
                     />
                 },
-                AppRoute::MangaChapterDefault(manga_id, chapter_number) => html! {
+                AppRoute::MangaChapter {
+                    manga_id,
+                    chapter_number,
+                } => html! {
                     <MangaPage
                         manga_id=manga_id
                         chapter_number=chapter_number
