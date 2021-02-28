@@ -81,7 +81,7 @@ fn column_spread(mangas: &[Manga]) -> Html {
 fn manga_entry(manga: &Manga) -> Html {
     html! {
         <RouterAnchor<AppRoute> route=AppRoute::ChapterList(manga.manga_id)>
-            <img src=&manga.cover_image_url alt=&manga.manga_name title=&manga.manga_name />
+            <img class="image-link" src=&manga.cover_image_url alt=&manga.manga_name title=&manga.manga_name />
         </RouterAnchor<AppRoute>>
     }
 }
