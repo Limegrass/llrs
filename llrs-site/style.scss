@@ -1,18 +1,10 @@
 // Colors
+// A themed bulma impl
+@import "https://jenil.github.io/bulmaswatch/darkly/bulmaswatch.min.css";
 $translucent-white: rgba(255, 255, 255, .8);
 $translucent-black: rgba(0, 0, 0, .8);
-$dimmer-grey: #1a1a1a;
-$royal-ass-purple: #442244;
 $quality-llrs-purple: #684580;
-$pale-ass-white: #DDDDEE;
-$grey-ass-white: #BBBBCC;
-$grey-asser-white: #CCCCDD;
-$error-your-shits-fucked-red: #FF4444;
-$dark-reader-grey: #181a1b;
-
-html, body {
-    background: $dark-reader-grey;
-}
+$bulma-tr-alt: #282f2f;
 
 .fixed-container {
     width: 100%;
@@ -38,4 +30,9 @@ html, body {
 
 .image-link:hover {
     opacity: .8;
+}
+
+// otherwise the first row and the thead is the same color, might be bad idk
+thead {
+    background-color: $bulma-tr-alt !important;
 }

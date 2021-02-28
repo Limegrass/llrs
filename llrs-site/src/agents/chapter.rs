@@ -1,6 +1,9 @@
 use llrs_model::Chapter;
 use log::*;
-use std::{collections::HashMap, rc::Rc};
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 use yew::{
     format::{Json, Nothing},
     services::{
