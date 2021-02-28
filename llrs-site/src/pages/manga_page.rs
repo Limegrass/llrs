@@ -13,7 +13,6 @@ use web_sys::HtmlImageElement;
 use yew::{agent::Bridge, prelude::*, Component, ComponentLink};
 use yew_router::{
     agent::RouteRequest,
-    components::RouterAnchor,
     prelude::{Route, RouteAgentDispatcher},
 };
 
@@ -47,6 +46,7 @@ pub enum Msg {
     PreloadNextImage { page_number: usize },
     FetchChapterComplete(Rc<Vec<Chapter>>),
     PageBack,
+    PageForward,
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
@@ -197,6 +197,58 @@ impl Component for MangaPage {
                     false
                 }
             }
+            Msg::PageForward => {
+                let last_page = self
+                    .state
+                    .pages
+                    .as_ref()
+                    .expect("Should never try render without pages")
+                    .len();
+                let next_page_chapter_number = if self.props.page_number == last_page {
+                    self.state
+                        .chapters
+                        .as_ref()
+                        .map(|chapter_list| {
+                            let current_chapter_index = chapter_list.iter().position(|chapter| {
+                                chapter.chapter_number == self.props.chapter_number
+                            });
+                            let next_chapter_index =
+                                current_chapter_index.map(|current_chapter_index| {
+                                    if current_chapter_index != chapter_list.len() - 1 {
+                                        current_chapter_index + 1
+                                    } else {
+                                        current_chapter_index
+                                    }
+                                });
+                            next_chapter_index
+                                .map(|index| {
+                                    chapter_list
+                                        .get(index)
+                                        .map(|chapter| chapter.chapter_number.as_str())
+                                        .unwrap_or(self.props.chapter_number.as_str())
+                                })
+                                .unwrap_or(self.props.chapter_number.as_str())
+                        })
+                        .unwrap_or(self.props.chapter_number.as_str())
+                } else {
+                    self.props.chapter_number.as_str()
+                };
+
+                let next_page_number = if next_page_chapter_number == self.props.chapter_number {
+                    min(last_page, (self.props.page_number as usize) + 1)
+                } else {
+                    1
+                };
+
+                let route = AppRoute::MangaChapterPage {
+                    manga_id: self.props.manga_id,
+                    chapter_number: next_page_chapter_number.to_owned(),
+                    page_number: next_page_number,
+                };
+                self.route_dispatcher
+                    .send(RouteRequest::ChangeRoute(Route::from(route)));
+                true
+            }
         }
     }
 
@@ -230,63 +282,22 @@ impl MangaPage {
 
     fn manga_page(&self, page: &Page) -> Html {
         // TODO: Look into an alternative to format!
-        let last_page = self
-            .state
-            .pages
-            .as_ref()
-            .expect("Should never try render without pages")
-            .len();
-        let next_page_chapter_number = if page.page_number == last_page as i32 {
-            self.state
-                .chapters
-                .as_ref()
-                .map(|chapter_list| {
-                    let current_chapter_index = chapter_list
-                        .iter()
-                        .position(|chapter| chapter.chapter_number == self.props.chapter_number);
-                    let next_chapter_index = current_chapter_index.map(|current_chapter_index| {
-                        if current_chapter_index != chapter_list.len() - 1 {
-                            current_chapter_index + 1
-                        } else {
-                            current_chapter_index
-                        }
-                    });
-                    next_chapter_index
-                        .map(|index| {
-                            chapter_list
-                                .get(index)
-                                .map(|chapter| chapter.chapter_number.as_str())
-                                .unwrap_or(self.props.chapter_number.as_str())
-                        })
-                        .unwrap_or(self.props.chapter_number.as_str())
-                })
-                .unwrap_or(self.props.chapter_number.as_str())
-        } else {
-            self.props.chapter_number.as_str()
-        };
-
-        let next_page_number = if next_page_chapter_number == self.props.chapter_number {
-            min(last_page, (page.page_number as usize) + 1)
-        } else {
-            1
-        };
-
-        type Anchor = RouterAnchor<AppRoute>;
         self.link.send_message(Msg::PreloadNextImage {
-            page_number: next_page_number,
+            page_number: min(
+                page.page_number as usize,
+                self.state
+                    .pages
+                    .as_ref()
+                    .map_or(page.page_number as usize, |pages| pages.len()),
+            ),
         });
 
         html! {
             <div class="container">
                 <div class="back-pager"
-                    onclick=self.link.callback(|_|Msg::PageBack) />
-                <Anchor
-                    classes="forward-pager"
-                    route=AppRoute::MangaChapterPage{
-                    manga_id: self.props.manga_id,
-                    chapter_number: next_page_chapter_number.to_owned(),
-                    page_number: next_page_number
-                }/>
+                    onclick=self.link.callback(|_| Msg::PageBack) />
+                <div class="forward-pager"
+                    onclick=self.link.callback(|_| Msg::PageForward) />
                 <img src=&page.url_string
                      alt=format!("Page {} Image", &page.page_number)
                  />
