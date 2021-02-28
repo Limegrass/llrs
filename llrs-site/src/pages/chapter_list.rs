@@ -32,7 +32,9 @@ impl Component for ChapterList {
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         let mut chapter_agent = ChapterAgent::bridge(link.callback(Msg::FetchChaptersComplete));
-        chapter_agent.send(Action::GetChapterList(props.manga_id));
+        chapter_agent.send(Action::GetChapterList {
+            manga_id: props.manga_id,
+        });
         let state = State {
             chapters: None,
             chapter_agent,

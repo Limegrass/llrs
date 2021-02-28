@@ -1,8 +1,14 @@
-use crate::components::breadcrumb::{Breadcrumb, Separator};
-use crate::pages::not_found;
 use crate::pages::{ChapterList, Home, MangaPage};
+use crate::{
+    agents::manga::MangaAgent,
+    components::breadcrumb::{Breadcrumb, Separator},
+};
+use crate::{
+    agents::{chapter::ChapterAgent, page::PageAgent},
+    pages::not_found,
+};
 use log::trace;
-use yew::prelude::*;
+use yew::{agent::Dispatcher, prelude::*};
 use yew_router::{components::RouterAnchor, prelude::*, switch::Permissive, Switch};
 
 #[derive(Debug, Switch, PartialEq, Clone)]
@@ -27,14 +33,30 @@ pub enum AppRoute {
     Home,
 }
 
-pub struct App {}
+// We house the Agents here to persist the data inside of them
+// Otherwise the Agents would get destroyed when the last bridge gets destructed.
+pub struct App {
+    #[allow(dead_code)]
+    manga_agent: Dispatcher<MangaAgent>,
+    #[allow(dead_code)]
+    chapter_agent: Dispatcher<ChapterAgent>,
+    #[allow(dead_code)]
+    page_agent: Dispatcher<PageAgent>,
+}
 
 impl Component for App {
     type Message = ();
     type Properties = ();
 
     fn create(_: Self::Properties, _: ComponentLink<Self>) -> Self {
-        Self {}
+        let manga_agent = MangaAgent::dispatcher();
+        let chapter_agent = ChapterAgent::dispatcher();
+        let page_agent = PageAgent::dispatcher();
+        Self {
+            manga_agent,
+            chapter_agent,
+            page_agent,
+        }
     }
 
     fn change(&mut self, _props: Self::Properties) -> ShouldRender {

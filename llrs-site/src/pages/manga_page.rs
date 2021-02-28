@@ -3,6 +3,7 @@ use crate::app::AppRoute;
 use llrs_model::Page;
 use log::*;
 use std::{cmp::min, rc::Rc};
+use web_sys::HtmlImageElement;
 use yew::{prelude::*, Component, ComponentLink};
 use yew_router::components::RouterAnchor;
 
@@ -11,6 +12,7 @@ pub struct State {
     view_format: ViewFormat,
     #[allow(dead_code)]
     page_agent: Box<dyn Bridge<PageAgent>>,
+    prefetcher: HtmlImageElement,
 }
 
 enum ViewFormat {
@@ -23,12 +25,14 @@ impl State {}
 pub struct MangaPage {
     state: State,
     props: Props,
+    link: ComponentLink<Self>,
 }
 
 #[derive(Debug)]
 pub enum Msg {
     FetchPagesComplete(Rc<Vec<Page>>),
     LoadPage { page_number: usize },
+    PreloadNextImage { page_number: usize },
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
@@ -43,6 +47,7 @@ impl Component for MangaPage {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+        trace!("manga_page: {:?}", props);
         let mut page_agent = PageAgent::bridge(link.callback(Msg::FetchPagesComplete));
         page_agent.send(Action::GetPageList {
             manga_id: props.manga_id,
@@ -50,12 +55,13 @@ impl Component for MangaPage {
         });
 
         let state = State {
+            prefetcher: HtmlImageElement::new().unwrap(),
             pages: None,
             view_format: ViewFormat::Single,
             page_agent,
         };
 
-        Self { state, props }
+        Self { state, props, link }
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
@@ -72,20 +78,23 @@ impl Component for MangaPage {
                 true
             }
             Msg::LoadPage { page_number } => {
-                let last_page = self
+                self.props.page_number = page_number;
+                true
+            }
+            Msg::PreloadNextImage { page_number } => {
+                let url = self
                     .state
                     .pages
                     .as_ref()
-                    .expect("Should never try render without pages")
-                    .len();
-                self.props.page_number = min(last_page, page_number);
-                page_number <= last_page
+                    .map(|pages| pages[page_number - 1].url_string.as_str())
+                    .unwrap_or("");
+                self.state.prefetcher.set_src(url);
+                false
             }
         }
     }
 
     fn view(&self) -> Html {
-        trace!("rendered manga_page");
         match &self.state.pages {
             Some(pages) => self.render_view(pages),
             None => html! {"Fetching"},
@@ -114,8 +123,17 @@ impl MangaPage {
 
     fn manga_page(&self, page: &Page) -> Html {
         // TODO: Look into an alternative to format!
-        let next_page_number = self.props.page_number + 1;
+        let last_page = self
+            .state
+            .pages
+            .as_ref()
+            .expect("Should never try render without pages")
+            .len();
+        let next_page_number = min(last_page, (page.page_number as usize) + 1);
         type Anchor = RouterAnchor<AppRoute>;
+        self.link.send_message(Msg::PreloadNextImage {
+            page_number: next_page_number,
+        });
         html! {
             <Anchor route=AppRoute::MangaChapterPage{
                 manga_id: self.props.manga_id,
