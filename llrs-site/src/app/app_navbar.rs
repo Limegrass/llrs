@@ -1,8 +1,4 @@
-use crate::{
-    agents::manga::Response as MangaResponse,
-    pages::{ChapterList, MangaList, MangaPage},
-    route::AppRoute,
-};
+use crate::{agents::manga::Response as MangaResponse, route::AppRoute};
 use crate::{
     agents::manga::{Action as MangaAction, MangaAgent},
     components::{
@@ -10,94 +6,35 @@ use crate::{
         navbar::Navbar,
     },
 };
-use crate::{
-    agents::{chapter::ChapterAgent, page::PageAgent},
-    pages::not_found,
-};
 use llrs_model::Manga;
-use log::trace;
 use std::rc::Rc;
-use yew::{agent::Dispatcher, html::ChildrenRenderer, prelude::*};
-use yew_router::{components::RouterAnchor, prelude::*, switch::Permissive};
+use yew::{html::ChildrenRenderer, prelude::*};
+use yew_router::{components::RouterAnchor, switch::Permissive};
 
 const LLRS_BRAND_LOGO_URL: &'static str = env!("LLRS_BRAND_LOGO_URL");
-type Anchor = RouterAnchor<AppRoute>;
 
-// We house the Agents here to persist the data inside of them
-// Otherwise the Agents would get destroyed when the last bridge gets destructed.
-pub struct App {
-    #[allow(dead_code)]
-    manga_agent: Dispatcher<MangaAgent>,
-    #[allow(dead_code)]
-    chapter_agent: Dispatcher<ChapterAgent>,
-    #[allow(dead_code)]
-    page_agent: Dispatcher<PageAgent>,
-}
+type Anchor = RouterAnchor<AppRoute>;
 
 struct State {
     mangas: Option<Rc<Vec<Rc<Manga>>>>,
 }
 
-#[derive(Debug)]
 pub enum Msg {
     AgentResponse(MangaResponse),
 }
 
-impl Component for App {
-    type Message = ();
-    type Properties = ();
-
-    fn create(_: Self::Properties, _: ComponentLink<Self>) -> Self {
-        let manga_agent = MangaAgent::dispatcher();
-        let chapter_agent = ChapterAgent::dispatcher();
-        let page_agent = PageAgent::dispatcher();
-        Self {
-            manga_agent,
-            chapter_agent,
-            page_agent,
-        }
-    }
-
-    fn change(&mut self, _: Self::Properties) -> ShouldRender {
-        false
-    }
-
-    fn update(&mut self, _: Self::Message) -> ShouldRender {
-        true
-    }
-
-    fn view(&self) -> Html {
-        let redirect =
-            Router::redirect(|route: Route| AppRoute::NotFound(Permissive(Some(route.route))));
-        let render = Router::render(|route: AppRoute| {
-            trace!("Route: {:?}", &route);
-            let content = render_main_content(&route);
-            html! {
-                <div class="container">
-                    <AppNavbar route=&route />
-                    {content}
-                </div>
-            }
-        });
-
-        html! {
-            <Router<AppRoute, ()> render=render redirect=redirect />
-        }
-    }
+#[derive(Clone, PartialEq, Properties)]
+pub(super) struct Props {
+    pub(super) route: AppRoute,
 }
 
-struct AppNavbar {
+pub(super) struct AppNavbar {
     #[allow(dead_code)]
     manga_agent: Box<dyn Bridge<MangaAgent>>,
     #[allow(dead_code)]
     link: ComponentLink<Self>,
     state: State,
     props: Props,
-}
-
-#[derive(Debug, Clone, PartialEq, Properties)]
-struct Props {
-    route: AppRoute,
 }
 
 impl Component for AppNavbar {
@@ -140,40 +77,6 @@ impl Component for AppNavbar {
                 </div>
             </Navbar>
         }
-    }
-}
-
-fn render_main_content(route: &AppRoute) -> Html {
-    match route {
-        AppRoute::MangaList => html! {
-            <MangaList />
-        },
-        AppRoute::ChapterList { manga_id } => html! {
-            <ChapterList manga_id=manga_id />
-        },
-        AppRoute::MangaChapterPage {
-            manga_id,
-            chapter_number,
-            page_number,
-        } => html! {
-            <MangaPage
-                manga_id=manga_id
-                chapter_number=chapter_number
-                page_number=page_number
-            />
-        },
-        AppRoute::MangaChapter {
-            manga_id,
-            chapter_number,
-        } => html! {
-            <MangaPage
-                manga_id=manga_id
-                chapter_number=chapter_number
-                page_number=1
-            />
-        },
-        AppRoute::NotFound(Permissive(None)) => html! { not_found("") },
-        AppRoute::NotFound(Permissive(Some(path))) => html! { not_found(&path) },
     }
 }
 
@@ -227,7 +130,6 @@ impl AppNavbar {
         }
     }
 
-    // TODO: Use Agents to get names of mangas/chapters
     fn get_brand_links(&self) -> Children {
         let brand_logo = html! {
             <Anchor classes="navbar-item" route=AppRoute::MangaList>
