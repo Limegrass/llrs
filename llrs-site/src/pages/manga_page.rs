@@ -11,12 +11,17 @@ use std::{
 };
 use web_sys::HtmlImageElement;
 use yew::{agent::Bridge, prelude::*, Component, ComponentLink};
-use yew_router::components::RouterAnchor;
+use yew_router::{
+    agent::RouteRequest,
+    components::RouterAnchor,
+    prelude::{Route, RouteAgentDispatcher},
+};
 
 pub struct State {
     pages: Option<Rc<Vec<Page>>>,
     chapters: Option<Rc<Vec<Chapter>>>,
     view_format: ViewFormat,
+    should_set_to_last_page: bool,
 }
 
 enum ViewFormat {
@@ -29,6 +34,7 @@ pub struct MangaPage {
     page_agent: Box<dyn Bridge<PageAgent>>,
     #[allow(dead_code)]
     chapter_agent: Box<dyn Bridge<ChapterAgent>>,
+    route_dispatcher: RouteAgentDispatcher,
     prefetcher: Option<HtmlImageElement>,
     state: State,
     props: Props,
@@ -40,6 +46,7 @@ pub enum Msg {
     FetchPagesComplete(Rc<Vec<Page>>),
     PreloadNextImage { page_number: usize },
     FetchChapterComplete(Rc<Vec<Chapter>>),
+    PageBack,
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
@@ -70,11 +77,15 @@ impl Component for MangaPage {
             chapters: None,
             pages: None,
             view_format: ViewFormat::Single,
+            should_set_to_last_page: false,
         };
+
+        let route_dispatcher = RouteAgentDispatcher::new();
 
         Self {
             prefetcher: HtmlImageElement::new().ok(),
             page_agent,
+            route_dispatcher,
             chapter_agent,
             state,
             props,
@@ -89,6 +100,7 @@ impl Component for MangaPage {
                 chapter_number: props.chapter_number.to_owned(),
             });
             self.props = props;
+            self.state.should_set_to_last_page = false;
             false
         } else {
             self.props = props;
@@ -100,8 +112,20 @@ impl Component for MangaPage {
         trace!("{:?}", msg);
         match msg {
             Msg::FetchPagesComplete(data) => {
-                self.state.pages = Some(data);
-                true
+                if self.state.should_set_to_last_page {
+                    let route = AppRoute::MangaChapterPage {
+                        manga_id: self.props.manga_id,
+                        chapter_number: self.props.chapter_number.to_owned(),
+                        page_number: data.len(),
+                    };
+                    self.route_dispatcher
+                        .send(RouteRequest::ChangeRoute(Route::from(route)));
+                    self.state.pages = Some(data);
+                    false
+                } else {
+                    self.state.pages = Some(data);
+                    true
+                }
             }
             Msg::PreloadNextImage { page_number } => {
                 let url = self
@@ -120,6 +144,58 @@ impl Component for MangaPage {
             Msg::FetchChapterComplete(chapters) => {
                 self.state.chapters = Some(chapters);
                 false
+            }
+            Msg::PageBack => {
+                let current_chapter_number = &self.props.chapter_number;
+                let previous_page_chapter_number = if self.props.page_number == 1 {
+                    self.state
+                        .chapters
+                        .as_ref()
+                        .map(|chapter_list| {
+                            let current_chapter_index = chapter_list.iter().position(|chapter| {
+                                &chapter.chapter_number == current_chapter_number
+                            });
+                            let previous_chapter_index =
+                                current_chapter_index.map(|current_chapter_index| {
+                                    if current_chapter_index != 0 {
+                                        current_chapter_index - 1
+                                    } else {
+                                        current_chapter_index
+                                    }
+                                });
+                            previous_chapter_index
+                                .map(|index| {
+                                    chapter_list
+                                        .get(index)
+                                        .map(|chapter| chapter.chapter_number.as_str())
+                                        .unwrap_or(current_chapter_number.as_str())
+                                })
+                                .unwrap_or(current_chapter_number.as_str())
+                        })
+                        .unwrap_or(self.props.chapter_number.as_str())
+                } else {
+                    self.props.chapter_number.as_str()
+                };
+
+                if current_chapter_number != previous_page_chapter_number {
+                    self.state.should_set_to_last_page = true;
+                    self.page_agent.send(PageAction::GetPageList {
+                        manga_id: self.props.manga_id,
+                        chapter_number: previous_page_chapter_number.to_owned(),
+                    });
+                    // TODO: LOVE THIS MUTABLE GARBAGE
+                    self.props.chapter_number = previous_page_chapter_number.to_owned();
+                    false
+                } else {
+                    let route = AppRoute::MangaChapterPage {
+                        manga_id: self.props.manga_id,
+                        chapter_number: self.props.chapter_number.to_owned(),
+                        page_number: max(1, self.props.page_number - 1),
+                    };
+                    self.route_dispatcher
+                        .send(RouteRequest::ChangeRoute(Route::from(route)));
+                    false
+                }
             }
         }
     }
@@ -189,7 +265,6 @@ impl MangaPage {
             self.props.chapter_number.as_str()
         };
 
-        let previous_page_number = max(1, (page.page_number as usize) - 1);
         let next_page_number = if next_page_chapter_number == self.props.chapter_number {
             min(last_page, (page.page_number as usize) + 1)
         } else {
@@ -200,15 +275,11 @@ impl MangaPage {
         self.link.send_message(Msg::PreloadNextImage {
             page_number: next_page_number,
         });
+
         html! {
             <div class="container">
-                <Anchor
-                    classes="back-pager"
-                    route=AppRoute::MangaChapterPage{
-                    manga_id: self.props.manga_id,
-                    chapter_number: self.props.chapter_number.to_owned(),
-                    page_number: previous_page_number
-                }/>
+                <div class="back-pager"
+                    onclick=self.link.callback(|_|Msg::PageBack) />
                 <Anchor
                     classes="forward-pager"
                     route=AppRoute::MangaChapterPage{
