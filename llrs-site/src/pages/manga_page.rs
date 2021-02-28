@@ -103,7 +103,6 @@ impl Component for MangaPage {
                 chapter_number: props.chapter_number.to_owned(),
             });
             self.props = props;
-            self.state.should_set_to_last_page = false;
             false
         } else {
             self.props = props;
@@ -149,6 +148,7 @@ impl Component for MangaPage {
                 false
             }
             Msg::PageBack => {
+                self.state.should_set_to_last_page = true;
                 self.scroll_to_manga_page_top();
                 let current_chapter_number = &self.props.chapter_number;
                 let previous_page_chapter_number = if self.props.page_number == 1 {
@@ -182,7 +182,6 @@ impl Component for MangaPage {
                 };
 
                 if current_chapter_number != previous_page_chapter_number {
-                    self.state.should_set_to_last_page = true;
                     self.page_agent.send(PageAction::GetPageList {
                         manga_id: self.props.manga_id,
                         chapter_number: previous_page_chapter_number.to_owned(),
@@ -202,6 +201,7 @@ impl Component for MangaPage {
                 }
             }
             Msg::PageForward => {
+                self.state.should_set_to_last_page = false;
                 self.scroll_to_manga_page_top();
                 let last_page = self
                     .state
