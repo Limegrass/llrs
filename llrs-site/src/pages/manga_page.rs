@@ -1,19 +1,17 @@
+use crate::agents::page::{Action, PageAgent};
 use crate::app::AppRoute;
 use llrs_model::Page;
-use log::{error, info};
-use yew::{
-    format::{Json, Nothing},
-    prelude::*,
-    services::fetch::{FetchService, FetchTask, Request, Response},
-    Component, ComponentLink,
-};
+use log::*;
+use std::rc::Rc;
+use yew::{prelude::*, Component, ComponentLink};
 use yew_router::components::RouterAnchor;
 
 pub struct State {
-    pages: Option<Vec<Page>>,
+    pages: Option<Rc<Vec<Page>>>,
     current_page_number: usize,
     view_format: ViewFormat,
-    fetch_task: FetchTask,
+    #[allow(dead_code)]
+    chapter_agent: Box<dyn Bridge<PageAgent>>,
 }
 
 enum ViewFormat {
@@ -28,8 +26,9 @@ pub struct MangaPage {
     state: State,
 }
 
+#[derive(Debug)]
 pub enum Msg {
-    FetchpagesComplete(Result<Vec<Page>, anyhow::Error>),
+    FetchPagesComplete(Rc<Vec<Page>>),
     LoadPage(usize),
 }
 
@@ -45,25 +44,17 @@ impl Component for MangaPage {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let manga_request = Request::get(format!(
-            "http://localhost:42069/manga/{}/{}",
-            props.manga_id, props.chapter_number
-        ))
-        .body(Nothing)
-        .expect("Could not build request.");
-        let manga_callback = link.callback(
-            |response: Response<Json<Result<Vec<Page>, anyhow::Error>>>| {
-                let Json(data) = response.into_body();
-                Msg::FetchpagesComplete(data)
-            },
-        );
-        let task =
-            FetchService::fetch(manga_request, manga_callback).expect("failed to start request");
+        let mut chapter_agent = PageAgent::bridge(link.callback(Msg::FetchPagesComplete));
+        chapter_agent.send(Action::GetPageList {
+            manga_id: props.manga_id,
+            chapter_number: props.chapter_number.to_owned(),
+        });
+
         let state = State {
             pages: None,
-            fetch_task: task,
             view_format: ViewFormat::Single,
             current_page_number: 1,
+            chapter_agent,
         };
 
         Self { link, state }
@@ -74,11 +65,9 @@ impl Component for MangaPage {
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
+        trace!("{:?}", msg);
         match msg {
-            Msg::FetchpagesComplete(data) => match data {
-                Ok(pages) => self.state.pages = Some(pages),
-                Err(err) => error!("{}", err),
-            },
+            Msg::FetchPagesComplete(data) => self.state.pages = Some(data),
             Msg::LoadPage(page_number) => self.state.current_page_number = page_number,
         }
         true
