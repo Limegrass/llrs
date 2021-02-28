@@ -3,7 +3,7 @@
   "scripts": {
     "dev": "webpack-dev-server --mode development --open",
     "prod": "webpack-dev-server --mode production --open",
-    "serve-prod": "simple-http-server --index --nocache --try-file dist/index.html -c=js,wasm,ico,html ./dist",
+    "serve-prod": "simple-http-server --index --try-file dist/index.html -c=js,wasm,ico,html ./dist",
     "build": "webpack --mode production",
     "build:dev": "webpack --mode development",
     "test": "wasm-pack test --chrome --firefox --safari --headless"

@@ -1,9 +1,8 @@
-use std::rc::Rc;
-
 use crate::agents::manga::{Action, MangaAgent};
 use crate::app::AppRoute;
 use llrs_model::Manga;
 use log::*;
+use std::rc::Rc;
 use yew::{prelude::*, Component, ComponentLink};
 use yew_router::components::RouterAnchor;
 
