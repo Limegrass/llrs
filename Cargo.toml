@@ -1,0 +1,14 @@
+[package]
+name = "llrs"
+version = "0.1.0"
+authors = ["limegrass <james@niis.me>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+libllrs = { version = '0.1.0', path = './libllrs' }
+tiberius = "0.5.5"
+async-trait = "0.1.42"
+tokio = { version = "1.0.2", features = [ "full" ] }
+futures = "0.3.12"
