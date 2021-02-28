@@ -12,7 +12,7 @@ use yew::{
 
 #[derive(Debug)]
 pub enum Msg {
-    FetchMangaComplete { mangas: Vec<Manga> },
+    FetchMangaComplete { mangas: Vec<Rc<Manga>> },
     Error,
 }
 
@@ -25,13 +25,14 @@ pub enum Action {
 pub struct MangaAgent {
     link: AgentLink<MangaAgent>,
     fetch_task: Option<FetchTask>,
-    mangas: Option<Rc<Vec<Manga>>>,
+    mangas: Option<Rc<Vec<Rc<Manga>>>>,
     subscribers: HashSet<HandlerId>,
 }
 
 #[derive(Debug)]
 pub enum Response {
-    MangaList { mangas: Rc<Vec<Manga>> },
+    // TODO: Refactor to use a Map at some point
+    MangaList { mangas: Rc<Vec<Rc<Manga>>> },
 }
 
 impl Agent for MangaAgent {
@@ -76,7 +77,7 @@ impl Agent for MangaAgent {
                 if let Some(mangas) = &self.mangas {
                     for sub in self.subscribers.iter() {
                         let response = Response::MangaList {
-                            mangas: Rc::clone(&mangas),
+                            mangas: Rc::clone(mangas),
                         };
                         self.link.respond(*sub, response);
                     }
@@ -107,7 +108,10 @@ impl MangaAgent {
     ) -> Msg {
         let Json(data) = response.into_body();
         match data {
-            Ok(mangas) => Msg::FetchMangaComplete { mangas },
+            Ok(mangas) => {
+                let mangas = mangas.into_iter().map(|manga| Rc::new(manga)).collect();
+                Msg::FetchMangaComplete { mangas }
+            }
             Err(error) => {
                 error!("{}", error);
                 Msg::Error

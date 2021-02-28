@@ -7,7 +7,7 @@ use yew::{prelude::*, Component, ComponentLink};
 use yew_router::components::RouterAnchor;
 
 pub struct State {
-    mangas: Option<Rc<Vec<Manga>>>,
+    mangas: Option<Rc<Vec<Rc<Manga>>>>,
     #[allow(dead_code)]
     manga_agent: Box<dyn Bridge<MangaAgent>>,
 }
@@ -72,7 +72,7 @@ impl Component for Home {
 }
 
 /// Spreads a chunk as a set of columns
-fn column_spread(mangas: &[Manga]) -> Html {
+fn column_spread(mangas: &[Rc<Manga>]) -> Html {
     html! {
         <div class="columns level">
             {for mangas.iter().map(|manga| as_column_level_item(manga_entry(manga)))}
