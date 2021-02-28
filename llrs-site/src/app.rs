@@ -150,9 +150,14 @@ impl Component for AppNavbar {
     }
 
     fn view(&self) -> Html {
-        let brand_links = self.get_brand_links(&self.props.route);
+        let brand_links = self.get_brand_links();
+        let menu_links = self.get_menu_links();
         html! {
-            <Navbar brand_children={brand_links} />
+            <Navbar brand_children={brand_links}>
+                <div class="navbar-end">
+                    {menu_links}
+                </div>
+            </Navbar>
         }
     }
 }
@@ -197,15 +202,48 @@ struct BreadcrumbLink {
 }
 
 impl AppNavbar {
+    fn get_selected_manga(&self) -> Option<Rc<Manga>> {
+        match self.props.route {
+            AppRoute::ChapterList(manga_id)
+            | AppRoute::MangaChapterPage {
+                manga_id,
+                chapter_number: _,
+                page_number: _,
+            }
+            | AppRoute::MangaChapter {
+                manga_id,
+                chapter_number: _,
+            } => self.state.mangas.as_ref().map_or(None, |mangas| {
+                mangas
+                    .iter()
+                    .find(|manga| manga.manga_id == manga_id)
+                    .map(|manga_ref| Rc::clone(manga_ref))
+            }),
+            _ => None,
+        }
+    }
+
+    fn get_menu_links(&self) -> Html {
+        let manga = self.get_selected_manga();
+        manga.as_ref().map_or(html! {}, |m| {
+            let buy_link = m.purchase_url.as_str();
+            if buy_link.len() > 0 {
+                html! { <a class="navbar-item" href=buy_link>{"Buy raws"}</a> }
+            } else {
+                html! {}
+            }
+        })
+    }
+
     // TODO: Use Agents to get names of mangas/chapters
-    fn get_brand_links(&self, route: &AppRoute) -> Children {
+    fn get_brand_links(&self) -> Children {
         let brand_logo = html! {
             <Anchor classes="navbar-item" route=AppRoute::Home>
                 <img src=&LLRS_BRAND_LOGO_URL alt="llrs logo" />
             </Anchor>
         };
         // Bulma ONLY formats the text properly with anchors
-        let links = match route {
+        let links = match &self.props.route {
             AppRoute::Home => vec![BreadcrumbLink {
                 route: AppRoute::Home,
                 link_text: "llrs".to_owned(),
