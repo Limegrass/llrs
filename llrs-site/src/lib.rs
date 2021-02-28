@@ -1,8 +1,9 @@
 #![recursion_limit = "512"]
 
+mod agents;
 mod app;
-mod pages;
 mod components;
+mod pages;
 
 use wasm_bindgen::prelude::*;
 

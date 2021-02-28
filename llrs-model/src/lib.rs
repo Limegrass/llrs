@@ -11,7 +11,7 @@ pub type DateTimeType = String;
 // Should redesign DB
 #[derive(Debug)]
 #[cfg(feature = "serde")]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Manga {
     pub manga_id: i32,
     pub manga_name: String,

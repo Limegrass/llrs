@@ -1,17 +1,16 @@
+use std::rc::Rc;
+
+use crate::agents::manga::{Action, MangaAgent};
 use crate::app::AppRoute;
 use llrs_model::Manga;
-use log::error;
-use yew::{
-    format::{Json, Nothing},
-    prelude::*,
-    services::fetch::{FetchService, FetchTask, Request, Response},
-    Component, ComponentLink,
-};
+use log::*;
+use yew::{prelude::*, Component, ComponentLink};
 use yew_router::components::RouterAnchor;
 
 pub struct State {
-    mangas: Option<Vec<Manga>>,
-    fetch_task: Option<FetchTask>,
+    mangas: Option<Rc<Vec<Manga>>>,
+    #[allow(dead_code)]
+    manga_agent: Box<dyn Bridge<MangaAgent>>,
 }
 
 impl State {}
@@ -20,8 +19,9 @@ pub struct Home {
     state: State,
 }
 
+#[derive(Debug)]
 pub enum Msg {
-    FetchMangasComplete(Result<Vec<Manga>, anyhow::Error>),
+    FetchMangasComplete(Rc<Vec<Manga>>),
 }
 
 impl Component for Home {
@@ -29,20 +29,11 @@ impl Component for Home {
     type Properties = ();
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let manga_request = Request::get("http://localhost:42069")
-            .body(Nothing)
-            .expect("Could not build request.");
-        let manga_callback = link.callback(
-            |response: Response<Json<Result<Vec<Manga>, anyhow::Error>>>| {
-                let Json(data) = response.into_body();
-                Msg::FetchMangasComplete(data)
-            },
-        );
-        let task =
-            FetchService::fetch(manga_request, manga_callback).expect("failed to start request");
+        let mut manga_agent = MangaAgent::bridge(link.callback(Msg::FetchMangasComplete));
+        manga_agent.send(Action::GetMangaList);
         let state = State {
             mangas: None,
-            fetch_task: Some(task),
+            manga_agent,
         };
 
         Self { state }
@@ -53,14 +44,9 @@ impl Component for Home {
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
+        trace!("{:?}", msg);
         match msg {
-            Msg::FetchMangasComplete(data) => match data {
-                Ok(mangas) => {
-                    self.state.fetch_task = None;
-                    self.state.mangas = Some(mangas)
-                }
-                Err(err) => error!("{}", err),
-            },
+            Msg::FetchMangasComplete(data) => self.state.mangas = Some(data),
         }
         true
     }
