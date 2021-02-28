@@ -1,15 +1,21 @@
 use crate::pages::{ChapterList, Home, MangaPage};
 use crate::{
     agents::manga::MangaAgent,
-    components::breadcrumb::{Breadcrumb, Separator},
+    components::{
+        breadcrumb::{Breadcrumb, Separator},
+        navbar::Navbar,
+    },
 };
 use crate::{
     agents::{chapter::ChapterAgent, page::PageAgent},
     pages::not_found,
 };
 use log::trace;
-use yew::{agent::Dispatcher, prelude::*};
+use yew::{agent::Dispatcher, html::ChildrenRenderer, prelude::*};
 use yew_router::{components::RouterAnchor, prelude::*, switch::Permissive, Switch};
+
+const LLRS_BRAND_LOGO_URL: &'static str = env!("LLRS_BRAND_LOGO_URL");
+type Anchor = RouterAnchor<AppRoute>;
 
 #[derive(Debug, Switch, PartialEq, Clone)]
 pub enum AppRoute {
@@ -73,10 +79,13 @@ impl Component for App {
         let render = Router::render(|route: AppRoute| {
             trace!("Route: {:?}", &route);
             let content = render_main_content(&route);
-            let breadcrumb = render_breadcrumb(&route);
+            let brand_links = get_brand_links(&route);
+            let navbar = html! {
+                <Navbar brand_children={brand_links} />
+            };
             html! {
                 <div class="container">
-                    {breadcrumb}
+                    {navbar}
                     {content}
                 </div>
             }
@@ -128,7 +137,12 @@ struct BreadcrumbLink {
 }
 
 // TODO: Use Agents to get names of mangas/chapters
-fn render_breadcrumb(route: &AppRoute) -> Html {
+fn get_brand_links(route: &AppRoute) -> Children {
+    let brand_logo = html! {
+        <Anchor classes="navbar-item" route=AppRoute::Home>
+            <img src=&LLRS_BRAND_LOGO_URL alt="llrs logo" />
+        </Anchor>
+    };
     // Bulma ONLY formats the text properly with anchors
     let links = match route {
         AppRoute::Home => vec![BreadcrumbLink {
@@ -176,11 +190,16 @@ fn render_breadcrumb(route: &AppRoute) -> Html {
         }],
     };
 
-    html! {
-        <Breadcrumb separator=Separator::Succeeds >
-        { links.into_iter().map(to_route_anchor).collect::<Html>()}
-        </Breadcrumb>
-    }
+    ChildrenRenderer::new(vec![html! {
+        <>
+            {brand_logo}
+            <div class="navbar-item">
+                <Breadcrumb separator=Separator::Succeeds>
+                    { links.into_iter().map(to_route_anchor).collect::<Html>()}
+                </Breadcrumb>
+            </div>
+        </>
+    }])
 }
 
 fn to_route_anchor(link: BreadcrumbLink) -> Html {
