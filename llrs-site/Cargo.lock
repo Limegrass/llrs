@@ -93,17 +93,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive_more"
-version = "0.99.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41cb0e6161ad61ed084a36ba71fbba9e3ac5aee3606fb607fe08da6acbcf3d8c"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -339,7 +328,6 @@ dependencies = [
  "wasm-logger",
  "web-sys",
  "wee_alloc",
- "ybc",
  "yew",
  "yew-router",
 ]
@@ -536,8 +524,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55c0f7123de74f0dab9b7d00fd614e7b19349cd1e2f5252bbe9b1754b59433be"
 dependencies = [
  "cfg-if 1.0.0",
- "serde",
- "serde_json",
  "wasm-bindgen-macro",
 ]
 
@@ -677,19 +663,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
-name = "ybc"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab71ca547ff4de197246e43a166820d4f973f1aee62ae3450cacf9a6520cb62e"
-dependencies = [
- "derive_more",
- "web-sys",
- "yew",
- "yew-router",
- "yewtil",
-]
-
-[[package]]
 name = "yew"
 version = "0.17.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -774,17 +747,4 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49bf2f66f0e61d65d1637523fa1faedd5aa291cf9cb8d8fb200678472279b672"
 dependencies = [
  "nom",
-]
-
-[[package]]
-name = "yewtil"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "003f4f533ee696c1f69d753db2c66096dec5700a93bd0bc801ab5891fec041c6"
-dependencies = [
- "futures",
- "log",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "yew",
 ]

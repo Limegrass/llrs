@@ -1,8 +1,9 @@
+use crate::components::breadcrumb::{Breadcrumb, Separator};
 use crate::pages::not_found;
 use crate::pages::{ChapterList, Home, MangaPage};
-use log::*;
+use log::trace;
 use yew::prelude::*;
-use yew_router::{prelude::*, switch::Permissive, Switch};
+use yew_router::{components::RouterAnchor, prelude::*, switch::Permissive, Switch};
 
 #[derive(Debug, Switch, PartialEq, Clone)]
 pub enum AppRoute {
@@ -41,9 +42,11 @@ impl Component for App {
         let redirect =
             Router::redirect(|route: Route| AppRoute::NotFound(Permissive(Some(route.route))));
         let render = Router::render(|route: AppRoute| {
-            info!("{:?}", route);
-            match route {
-                AppRoute::Home => html! {<Home/>},
+            trace!("Route: {:?}", route);
+            let content = match route {
+                AppRoute::Home => html! {
+                    <Home/>
+                },
                 AppRoute::ChapterList(manga_id) => html! {
                     <ChapterList manga_id=manga_id />
                 },
@@ -56,14 +59,22 @@ impl Component for App {
                 },
                 AppRoute::NotFound(Permissive(None)) => html! { not_found("") },
                 AppRoute::NotFound(Permissive(Some(path))) => html! { not_found(&path) },
+            };
+            html! {
+                <div class="container">
+                    <Breadcrumb separator=Separator::Succeeds >
+                        <a href="/">
+                            {"🏠 llrs"}
+                        </a>
+                        <a href="#">{"prolly use agents for this"}</a>
+                    </Breadcrumb>
+                    {content}
+                </div>
             }
         });
 
-        info!("rendered!");
         html! {
             <Router<AppRoute, ()> render=render redirect=redirect />
         }
     }
 }
-
-impl App {}
