@@ -234,20 +234,30 @@ impl Component for MangaPage {
                     self.props.chapter_number.as_str()
                 };
 
-                let next_page_number = if next_page_chapter_number == self.props.chapter_number {
-                    min(last_page, (self.props.page_number as usize) + 1)
+                let route = if next_page_chapter_number == self.props.chapter_number {
+                    let next_page_number = self.props.page_number as usize + 1;
+                    if next_page_number > last_page {
+                        AppRoute::ChapterList {
+                            manga_id: self.props.manga_id,
+                        }
+                    } else {
+                        AppRoute::MangaChapterPage {
+                            manga_id: self.props.manga_id,
+                            chapter_number: next_page_chapter_number.to_owned(),
+                            page_number: next_page_number,
+                        }
+                    }
                 } else {
-                    1
+                    AppRoute::MangaChapterPage {
+                        manga_id: self.props.manga_id,
+                        chapter_number: next_page_chapter_number.to_owned(),
+                        page_number: 1,
+                    }
                 };
 
-                let route = AppRoute::MangaChapterPage {
-                    manga_id: self.props.manga_id,
-                    chapter_number: next_page_chapter_number.to_owned(),
-                    page_number: next_page_number,
-                };
                 self.route_dispatcher
                     .send(RouteRequest::ChangeRoute(Route::from(route)));
-                true
+                false
             }
         }
     }

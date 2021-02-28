@@ -37,7 +37,7 @@ pub enum AppRoute {
         chapter_number: String,
     },
     #[to = "/manga/{manga_id}"]
-    ChapterList(i32),
+    ChapterList { manga_id: i32 },
     #[to = "/page-not-found"]
     NotFound(Permissive<String>),
     #[to = "/!"]
@@ -167,7 +167,7 @@ fn render_main_content(route: &AppRoute) -> Html {
         AppRoute::Home => html! {
             <Home/>
         },
-        AppRoute::ChapterList(manga_id) => html! {
+        AppRoute::ChapterList { manga_id } => html! {
             <ChapterList manga_id=manga_id />
         },
         AppRoute::MangaChapterPage {
@@ -204,7 +204,7 @@ struct BreadcrumbLink {
 impl AppNavbar {
     fn get_selected_manga(&self) -> Option<Rc<Manga>> {
         match self.props.route {
-            AppRoute::ChapterList(manga_id)
+            AppRoute::ChapterList { manga_id }
             | AppRoute::MangaChapterPage {
                 manga_id,
                 chapter_number: _,
@@ -248,13 +248,15 @@ impl AppNavbar {
                 route: AppRoute::Home,
                 link_text: "llrs".to_owned(),
             }],
-            AppRoute::ChapterList(manga_id) => vec![
+            AppRoute::ChapterList { manga_id } => vec![
                 BreadcrumbLink {
                     route: AppRoute::Home,
                     link_text: "llrs".to_owned(),
                 },
                 BreadcrumbLink {
-                    route: AppRoute::ChapterList(*manga_id),
+                    route: AppRoute::ChapterList {
+                        manga_id: *manga_id,
+                    },
                     link_text: self
                         .state
                         .mangas
@@ -283,7 +285,9 @@ impl AppNavbar {
                     link_text: "llrs".to_owned(),
                 },
                 BreadcrumbLink {
-                    route: AppRoute::ChapterList(*manga_id),
+                    route: AppRoute::ChapterList {
+                        manga_id: *manga_id,
+                    },
                     link_text: self
                         .state
                         .mangas
