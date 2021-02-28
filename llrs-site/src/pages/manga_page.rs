@@ -10,7 +10,7 @@ pub struct State {
     pages: Option<Rc<Vec<Page>>>,
     view_format: ViewFormat,
     #[allow(dead_code)]
-    chapter_agent: Box<dyn Bridge<PageAgent>>,
+    page_agent: Box<dyn Bridge<PageAgent>>,
 }
 
 enum ViewFormat {
@@ -52,7 +52,7 @@ impl Component for MangaPage {
         let state = State {
             pages: None,
             view_format: ViewFormat::Single,
-            chapter_agent: page_agent,
+            page_agent,
         };
 
         Self { state, props }
