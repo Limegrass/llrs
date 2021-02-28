@@ -2,7 +2,10 @@ use crate::agents::page::{Action, PageAgent};
 use crate::app::AppRoute;
 use llrs_model::Page;
 use log::*;
-use std::{cmp::min, rc::Rc};
+use std::{
+    cmp::{max, min},
+    rc::Rc,
+};
 use web_sys::HtmlImageElement;
 use yew::{prelude::*, Component, ComponentLink};
 use yew_router::components::RouterAnchor;
@@ -31,7 +34,6 @@ pub struct MangaPage {
 #[derive(Debug)]
 pub enum Msg {
     FetchPagesComplete(Rc<Vec<Page>>),
-    LoadPage { page_number: usize },
     PreloadNextImage { page_number: usize },
 }
 
@@ -65,9 +67,8 @@ impl Component for MangaPage {
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
-        self.update(Msg::LoadPage {
-            page_number: props.page_number,
-        })
+        self.props = props;
+        true
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
@@ -75,10 +76,6 @@ impl Component for MangaPage {
         match msg {
             Msg::FetchPagesComplete(data) => {
                 self.state.pages = Some(data);
-                true
-            }
-            Msg::LoadPage { page_number } => {
-                self.props.page_number = page_number;
                 true
             }
             Msg::PreloadNextImage { page_number } => {
@@ -129,21 +126,32 @@ impl MangaPage {
             .as_ref()
             .expect("Should never try render without pages")
             .len();
+        let previous_page_number = max(1, (page.page_number as usize) - 1);
         let next_page_number = min(last_page, (page.page_number as usize) + 1);
         type Anchor = RouterAnchor<AppRoute>;
         self.link.send_message(Msg::PreloadNextImage {
             page_number: next_page_number,
         });
         html! {
-            <Anchor route=AppRoute::MangaChapterPage{
-                manga_id: self.props.manga_id,
-                chapter_number: self.props.chapter_number.to_owned(),
-                page_number: next_page_number
-            }>
+            <div class="container">
+                <Anchor
+                    classes="back-pager"
+                    route=AppRoute::MangaChapterPage{
+                    manga_id: self.props.manga_id,
+                    chapter_number: self.props.chapter_number.to_owned(),
+                    page_number: previous_page_number
+                }/>
+                <Anchor
+                    classes="forward-pager"
+                    route=AppRoute::MangaChapterPage{
+                    manga_id: self.props.manga_id,
+                    chapter_number: self.props.chapter_number.to_owned(),
+                    page_number: next_page_number
+                }/>
                 <img src=&page.url_string
                      alt=format!("Page {} Image", &page.page_number)
                  />
-            </Anchor>
+            </div>
         }
     }
 }

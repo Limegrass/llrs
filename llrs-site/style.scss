@@ -38,6 +38,23 @@ $bulma-tr-alt: #282f2f;
     opacity: .8;
 }
 
+.back-pager {
+    cursor: w-resize;
+    position: absolute;
+    width: 45%;
+    height: 100%;
+    transition: none;
+}
+
+.forward-pager {
+    cursor: e-resize;
+    position: absolute;
+    left: 45%;
+    width: 55%;
+    height: 100%;
+    transition: none;
+}
+
 // otherwise the first row and the thead is the same color, might be bad idk
 thead {
     background-color: $bulma-tr-alt !important;
