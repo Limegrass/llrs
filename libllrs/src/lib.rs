@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use futures::{AsyncRead, AsyncWrite};
@@ -92,6 +94,7 @@ SELECT
 FROM Manga m
 JOIN Author a
     ON m.AuthorID = a.AuthorID
+ORDER BY m.MangaID
 ";
 
 const SELECT_MANGA_CHAPTERS_QUERY: &str = "
@@ -102,13 +105,13 @@ SELECT
     DateReleased,
     MangaID
 FROM MangaChapter
-WHERE MangaID = @P1;
+WHERE MangaID = @P1
 ";
 
 const SELECT_CHAPTER_PAGES_QUERY: &str = "
 SELECT
-    URL,
-    PageNumber
+    u.URL,
+    p.PageNumber
 FROM Page p
 JOIN PageURL u
     ON p.PageID = u.PageID
@@ -117,6 +120,7 @@ JOIN MangaChapter mc
         AND mc.ChapterNumber = @P2
 WHERE u.Priority = 1
     AND p.MangaID = @P1
+ORDER BY p.PageNumber
 ";
 
 // i32 as no u32 in SQL Server
@@ -163,29 +167,36 @@ impl MangaService<i32> for Waifusims<Compat<TcpStream>> {
             .query(SELECT_MANGA_CHAPTERS_QUERY, &[&manga_id])
             .await?;
         let rows = stream.into_first_result().await?;
-        rows.iter()
-            .map(|row| {
-                Ok(Chapter {
-                    manga_id: row.get("MangaID").expect("MangaID is NOT NULL"),
-                    chapter_number: row
-                        .get::<&str, _>("ChapterNumber")
-                        .expect("ChapterNumber is NOT NULL")
-                        .to_owned(),
-                    chapter_name: row
-                        .get::<&str, _>("ChapterName")
-                        .expect("ChapterName is NOT NULL")
-                        .to_owned(),
-                    creation_date: row
-                        .get::<NaiveDateTime, _>("DateCreated")
-                        .expect("DateCreated is NOT NULL")
-                        .to_owned(),
-                    release_date: row
-                        .get::<NaiveDateTime, _>("DateReleased")
-                        .expect("DateReleased is hopefully NOT NULL but IDR")
-                        .to_owned(),
-                })
+        let mut chapters = rows
+            .into_iter()
+            .map(|row| Chapter {
+                manga_id: row.get("MangaID").expect("MangaID is NOT NULL"),
+                chapter_number: row
+                    .get::<&str, _>("ChapterNumber")
+                    .expect("ChapterNumber is NOT NULL")
+                    .to_owned(),
+                chapter_name: row
+                    .get::<&str, _>("ChapterName")
+                    .expect("ChapterName is NOT NULL")
+                    .to_owned(),
+                creation_date: row
+                    .get::<NaiveDateTime, _>("DateCreated")
+                    .expect("DateCreated is NOT NULL")
+                    .to_owned(),
+                release_date: row
+                    .get::<NaiveDateTime, _>("DateReleased")
+                    .expect("DateReleased is hopefully NOT NULL but IDR")
+                    .to_owned(),
             })
-            .collect()
+            .collect::<Vec<Chapter>>();
+        chapters.sort_by(|a, b| {
+            let chapter_number_a: f64 = a.chapter_number.parse().unwrap_or(0f64);
+            let chapter_number_b: f64 = b.chapter_number.parse().unwrap_or(0f64);
+            chapter_number_a
+                .partial_cmp(&chapter_number_b)
+                .unwrap_or(Ordering::Equal)
+        });
+        Ok(chapters)
     }
 
     async fn get_pages(&mut self, manga_id: i32, chapter_number: &str) -> Result<Vec<Page>> {
