@@ -91,7 +91,9 @@ impl Component for ChapterList {
             Some(chapters) => html! {
                 // TODO: why doesn't this center the image? 100% in the mean time
                 <div class="container">
-                    <img src=cover_image_url style="width: 100%" />
+                    <figure class="container manga-cover-image">
+                        <img src=cover_image_url />
+                    </figure>
                     <table class="table is-fullwidth is-striped is-narrow">
                         <thead>
                             <th> { "Chapter Number" } </th>

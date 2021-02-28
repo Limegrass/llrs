@@ -14,11 +14,17 @@ $bulma-tr-alt: #282f2f;
     left: 0;
 }
 
-.flex-center {
+@mixin flex-center() {
     display: flex;
     justify-content: center;
     align-items: center;
 }
+
+.manga-cover-image {
+    @include flex-center();
+    max-width: 760px;
+}
+
 
 .not-found {
     margin: auto;

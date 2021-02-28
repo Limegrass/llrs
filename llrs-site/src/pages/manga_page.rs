@@ -115,9 +115,9 @@ impl MangaPage {
             },
         };
         html! {
-            <div classes="container">
+            <figure class="container image">
                 {pages}
-            </div>
+            </figure>
         }
     }
 
