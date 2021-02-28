@@ -117,6 +117,7 @@ JOIN PageURL u
     ON p.PageID = u.PageID
 JOIN MangaChapter mc
     ON mc.ChapterIndex = p.ChapterIndex
+        AND mc.MangaID = p.MangaID
         AND mc.ChapterNumber = @P2
 WHERE u.Priority = 1
     AND p.MangaID = @P1
