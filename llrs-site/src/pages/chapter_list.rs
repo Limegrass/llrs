@@ -2,7 +2,7 @@ use crate::agents::{
     chapter::{Action as ChapterAction, ChapterAgent},
     manga::{Action as MangaAction, MangaAgent, Response as MangaResponse},
 };
-use crate::app::AppRoute;
+use crate::route::AppRoute;
 use llrs_model::{Chapter, Manga};
 use log::*;
 use std::rc::Rc;

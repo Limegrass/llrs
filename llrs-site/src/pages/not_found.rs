@@ -1,4 +1,4 @@
-use crate::app::AppRoute;
+use crate::route::AppRoute;
 use yew::prelude::*;
 use yew_router::components::RouterAnchor;
 

@@ -1,5 +1,5 @@
 use crate::agents::manga::{Action, MangaAgent, Response};
-use crate::app::AppRoute;
+use crate::route::AppRoute;
 use llrs_model::Manga;
 use log::*;
 use std::rc::Rc;

@@ -1,6 +1,7 @@
 use crate::{
     agents::manga::Response as MangaResponse,
     pages::{ChapterList, Home, MangaPage},
+    route::AppRoute,
 };
 use crate::{
     agents::manga::{Action as MangaAction, MangaAgent},
@@ -17,32 +18,10 @@ use llrs_model::Manga;
 use log::trace;
 use std::rc::Rc;
 use yew::{agent::Dispatcher, html::ChildrenRenderer, prelude::*};
-use yew_router::{components::RouterAnchor, prelude::*, switch::Permissive, Switch};
+use yew_router::{components::RouterAnchor, prelude::*, switch::Permissive};
 
 const LLRS_BRAND_LOGO_URL: &'static str = env!("LLRS_BRAND_LOGO_URL");
 type Anchor = RouterAnchor<AppRoute>;
-
-#[derive(Debug, Switch, PartialEq, Clone)]
-pub enum AppRoute {
-    #[to = "/manga/{manga_id}/{chapter_number}/{page_number}"]
-    MangaChapterPage {
-        manga_id: i32,
-        chapter_number: String,
-        page_number: usize,
-    },
-    // support users inputting the chapter number manually without a page
-    #[to = "/manga/{manga_id}/{chapter_number}"]
-    MangaChapter {
-        manga_id: i32,
-        chapter_number: String,
-    },
-    #[to = "/manga/{manga_id}"]
-    ChapterList { manga_id: i32 },
-    #[to = "/page-not-found"]
-    NotFound(Permissive<String>),
-    #[to = "/!"]
-    Home,
-}
 
 // We house the Agents here to persist the data inside of them
 // Otherwise the Agents would get destroyed when the last bridge gets destructed.

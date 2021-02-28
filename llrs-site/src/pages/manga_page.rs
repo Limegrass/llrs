@@ -2,7 +2,7 @@ use crate::agents::{
     chapter::{Action as ChapterAction, ChapterAgent},
     page::{Action as PageAction, PageAgent},
 };
-use crate::app::AppRoute;
+use crate::route::AppRoute;
 use llrs_model::{Chapter, Page};
 use log::*;
 use std::{cmp::max, rc::Rc};

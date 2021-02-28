@@ -4,6 +4,7 @@ mod agents;
 mod app;
 mod components;
 mod pages;
+mod route;
 
 use wasm_bindgen::prelude::*;
 
