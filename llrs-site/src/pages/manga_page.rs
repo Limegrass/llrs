@@ -116,11 +116,31 @@ impl Component for MangaPage {
         trace!("{:?}", msg);
         match msg {
             Msg::FetchPagesComplete(data) => {
-                if self.state.should_set_to_last_page {
+                if self.state.should_set_to_last_page || data.len() < self.props.page_number {
                     let route = AppRoute::MangaChapterPage {
                         manga_id: self.props.manga_id,
                         chapter_number: self.props.chapter_number.to_owned(),
                         page_number: data.len(),
+                    };
+                    self.route_dispatcher
+                        .send(RouteRequest::ChangeRoute(Route::from(route)));
+                    self.state.starting_page_number = Some(self.props.page_number);
+                    self.state.pages = Some(data);
+                    false
+                } else if data.len() == 0 {
+                    let route = AppRoute::NotFound(Permissive(Some(format!(
+                        "Manga with ID {} and Chapter {} not found",
+                        self.props.manga_id, self.props.chapter_number
+                    ))));
+                    self.route_dispatcher
+                        .send(RouteRequest::ChangeRoute(Route::from(route)));
+                    self.state.starting_page_number = Some(self.props.page_number);
+                    false
+                } else if self.props.page_number == 0 {
+                    let route = AppRoute::MangaChapterPage {
+                        manga_id: self.props.manga_id,
+                        chapter_number: self.props.chapter_number.to_owned(),
+                        page_number: Permissive(Some(1.to_string())),
                     };
                     self.route_dispatcher
                         .send(RouteRequest::ChangeRoute(Route::from(route)));
@@ -323,20 +343,23 @@ impl MangaPage {
     }
 
     fn render_view(&self, pages: &[Page]) -> Html {
-        let page_index = self.props.page_number - 1;
-        let pages = match self.state.view_format {
-            // TODO: Progressive loading (first page first)
-            ViewFormat::Long => html! {
-                for pages.iter().map(|val| self.manga_page(&val))
-            },
-            ViewFormat::Single => html! {
-                self.manga_page(&pages[page_index])
-            },
-        };
-        html! {
-            <figure class="container image">
-                {pages}
-            </figure>
+        if let Some(page_index) = self.props.page_number.checked_sub(1) {
+            let pages = match self.state.view_format {
+                // TODO: Progressive loading (first page first)
+                ViewFormat::Long => html! {
+                    for pages.iter().map(|val| self.manga_page(&val))
+                },
+                ViewFormat::Single => html! {
+                    self.manga_page(&pages[page_index])
+                },
+            };
+            html! {
+                <figure class="container image">
+                    {pages}
+                </figure>
+            }
+        } else {
+            html! {"Somehow had a page_number of 0"}
         }
     }
 
