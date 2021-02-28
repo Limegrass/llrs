@@ -13,6 +13,7 @@ use yew::{agent::Bridge, prelude::*, Component, ComponentLink};
 use yew_router::{
     agent::RouteRequest,
     prelude::{Route, RouteAgentDispatcher},
+    switch::Permissive,
 };
 
 pub(crate) struct State {
@@ -137,10 +138,9 @@ impl Component for MangaPage {
                     self.state.starting_page_number = Some(self.props.page_number);
                     false
                 } else if self.props.page_number == 0 {
-                    let route = AppRoute::MangaChapterPage {
+                    let route = AppRoute::MangaChapter {
                         manga_id: self.props.manga_id,
                         chapter_number: self.props.chapter_number.to_owned(),
-                        page_number: Permissive(Some(1.to_string())),
                     };
                     self.route_dispatcher
                         .send(RouteRequest::ChangeRoute(Route::from(route)));

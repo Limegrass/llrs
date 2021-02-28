@@ -108,15 +108,18 @@ impl AppNavbar {
     }
 
     fn get_menu_links(&self) -> Html {
-        let manga = self.get_selected_manga();
         let discord_link = html! {
-            <a class="navbar-item" href=env!("LLRS_DISCORD_URL")>{"Join the Discord"}</a>
+            <a class="navbar-item" href=env!("LLRS_DISCORD_URL")>
+                {"Join the Discord"}
+            </a>
         };
-        let manga_link = manga.as_ref().map_or(html! {}, |m| {
-            let buy_link = m.purchase_url.as_str();
-            if buy_link.len() > 0 {
+        let manga = self.get_selected_manga();
+        let manga_link = manga.as_ref().map_or(html! {}, |link| {
+            if link.purchase_url.len() > 0 {
                 html! {
-                    <a class="navbar-item" href=buy_link>{"Support the Author"}</a>
+                    <a class="navbar-item" href=link.purchase_url.as_str()>
+                        {"Support the Author"}
+                    </a>
                 }
             } else {
                 html! {}
@@ -155,14 +158,12 @@ impl AppNavbar {
                         .state
                         .mangas
                         .as_ref()
-                        .map(|mangas| {
+                        .map_or(manga_id.to_string(), |mangas| {
                             mangas
                                 .iter()
                                 .find(|manga| manga.manga_id == *manga_id)
-                                .map(|manga| manga.manga_name.to_owned())
-                                .unwrap_or(manga_id.to_string())
-                        })
-                        .unwrap_or(manga_id.to_string()),
+                                .map_or(manga_id.to_string(), |manga| manga.manga_name.to_owned())
+                        }),
                 },
             ],
             AppRoute::MangaChapterPage {
@@ -186,14 +187,12 @@ impl AppNavbar {
                         .state
                         .mangas
                         .as_ref()
-                        .map(|mangas| {
+                        .map_or(manga_id.to_string(), |mangas| {
                             mangas
                                 .iter()
                                 .find(|manga| manga.manga_id == *manga_id)
-                                .map(|manga| manga.manga_name.to_owned())
-                                .unwrap_or(manga_id.to_string())
-                        })
-                        .unwrap_or(manga_id.to_string()),
+                                .map_or(manga_id.to_string(), |manga| manga.manga_name.to_owned())
+                        }),
                 },
                 BreadcrumbLink {
                     route: AppRoute::MangaChapter {
