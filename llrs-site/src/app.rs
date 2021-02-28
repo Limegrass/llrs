@@ -228,7 +228,7 @@ impl AppNavbar {
         manga.as_ref().map_or(html! {}, |m| {
             let buy_link = m.purchase_url.as_str();
             if buy_link.len() > 0 {
-                html! { <a class="navbar-item" href=buy_link>{"Buy raws"}</a> }
+                html! { <a class="navbar-item" href=buy_link>{"Support the Author"}</a> }
             } else {
                 html! {}
             }
