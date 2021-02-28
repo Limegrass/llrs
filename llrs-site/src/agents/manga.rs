@@ -13,7 +13,7 @@ use yew::{
 #[derive(Debug)]
 pub(crate) enum Msg {
     FetchMangaComplete { mangas: Vec<Rc<Manga>> },
-    Error,
+    Error(anyhow::Error),
 }
 
 #[derive(Debug)]
@@ -53,7 +53,7 @@ impl Agent for MangaAgent {
     fn update(&mut self, msg: Self::Message) {
         trace!("{:?}", msg);
         match msg {
-            Msg::Error => {}
+            Msg::Error(error) => error!("{}", error),
             Msg::FetchMangaComplete { mangas } => {
                 self.mangas = Some(Rc::new(mangas));
                 self.link.send_input(Action::EmitListUpdate);
@@ -71,7 +71,7 @@ impl Agent for MangaAgent {
                     self.link.respond(requester, response);
                 } else if self.fetch_task.is_none() {
                     self.begin_data_fetch()
-                }
+                } // else wait for EmitListUpdate to trigger from existing fetch_task
             }
             Action::EmitListUpdate => {
                 if let Some(mangas) = &self.mangas {
@@ -97,10 +97,10 @@ impl Agent for MangaAgent {
 
 impl MangaAgent {
     fn begin_data_fetch(&mut self) {
-        let task = self
-            .get_request_manga_task(MangaAgent::parse_manga_fetch_to_msg)
-            .expect("Failed to build request");
-        self.fetch_task = Some(task);
+        match self.get_request_manga_task(MangaAgent::parse_manga_fetch_to_msg) {
+            Ok(task) => self.fetch_task = Some(task),
+            Err(error) => error!("{}", error),
+        }
     }
 
     fn parse_manga_fetch_to_msg(
@@ -112,10 +112,7 @@ impl MangaAgent {
                 let mangas = mangas.into_iter().map(|manga| Rc::new(manga)).collect();
                 Msg::FetchMangaComplete { mangas }
             }
-            Err(error) => {
-                error!("{}", error);
-                Msg::Error
-            }
+            Err(error) => Msg::Error(error),
         }
     }
 
@@ -123,9 +120,7 @@ impl MangaAgent {
         &self,
         result_handler: fn(FetchResponse<Json<Result<Vec<Manga>, anyhow::Error>>>) -> Msg,
     ) -> Result<FetchTask, anyhow::Error> {
-        let request = FetchRequest::get("http://localhost:42069")
-            .body(Nothing)
-            .expect("Could not build request.");
+        let request = FetchRequest::get("http://localhost:42069").body(Nothing)?;
         let callback = self.link.callback(result_handler);
         FetchService::fetch(request, callback)
     }
