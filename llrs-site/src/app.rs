@@ -9,6 +9,8 @@ use yew_router::{components::RouterAnchor, prelude::*, switch::Permissive, Switc
 pub enum AppRoute {
     #[to = "/manga/{manga_id}/{chapter_number}/{page}"]
     MangaChapter(i32, String, u32),
+    #[to = "/manga/{manga_id}/{chapter_number}"]
+    MangaChapterDefault(i32, String),
     #[to = "/manga/{manga_id}"]
     ChapterList(i32),
     #[to = "/page-not-found"]
@@ -55,6 +57,13 @@ impl Component for App {
                         manga_id=manga_id
                         chapter_number=chapter_number
                         page_number=page_number
+                    />
+                },
+                AppRoute::MangaChapterDefault(manga_id, chapter_number) => html! {
+                    <MangaPage
+                        manga_id=manga_id
+                        chapter_number=chapter_number
+                        page_number=1
                     />
                 },
                 AppRoute::NotFound(Permissive(None)) => html! { not_found("") },
