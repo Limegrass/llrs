@@ -1,0 +1,17 @@
+[package]
+name = "llrs_model"
+version = "0.1.0"
+authors = ["limegrass <james@niis.me>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+full = ["serde", "chrono", "chrono/serde", "wasmbind"]
+wasmbind = ["chrono/wasmbind"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"], optional = true }
+chrono = { version = "0.4", optional = true }

@@ -1,0 +1,37 @@
+// Colors
+$translucent-white: rgba(255, 255, 255, .8);
+$translucent-black: rgba(0, 0, 0, .8);
+$dimmer-grey: #1a1a1a;
+$royal-ass-purple: #442244;
+$quality-llrs-purple: #684580;
+$pale-ass-white: #DDDDEE;
+$grey-ass-white: #BBBBCC;
+$grey-asser-white: #CCCCDD;
+$error-your-shits-fucked-red: #FF4444;
+$dark-reader-grey: #181a1b;
+
+html, body {
+    background: $dark-reader-grey;
+}
+
+.fixed-container {
+    width: 100%;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+}
+
+.flex-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.not-found {
+    margin: auto;
+    width: 50%;
+    font-size: 10vw;
+    background: $quality-llrs-purple;
+    text-align: center;
+}
