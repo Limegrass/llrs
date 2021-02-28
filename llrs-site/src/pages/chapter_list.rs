@@ -1,28 +1,24 @@
+use crate::agents::chapter::{Action, ChapterAgent};
 use crate::app::AppRoute;
 use llrs_model::Chapter;
-use log::{error, info};
-use yew::{
-    format::{Json, Nothing},
-    prelude::*,
-    services::fetch::{FetchService, FetchTask, Request, Response},
-    Component, ComponentLink,
-};
+use log::*;
+use std::rc::Rc;
+use yew::{prelude::*, Component, ComponentLink};
 use yew_router::components::RouterAnchor;
 
 pub struct State {
-    chapters: Option<Vec<Chapter>>,
-    fetch_task: FetchTask,
+    chapters: Option<Rc<Vec<Chapter>>>,
+    #[allow(dead_code)]
+    chapter_agent: Box<dyn Bridge<ChapterAgent>>,
 }
 
-impl State {}
-
 pub struct ChapterList {
-    link: ComponentLink<Self>,
     state: State,
 }
 
+#[derive(Debug)]
 pub enum Msg {
-    FetchChaptersComplete(Result<Vec<Chapter>, anyhow::Error>),
+    FetchChaptersComplete(Rc<Vec<Chapter>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
@@ -35,24 +31,14 @@ impl Component for ChapterList {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let manga_request =
-            Request::get(format!("http://localhost:42069/manga/{}", props.manga_id))
-                .body(Nothing)
-                .expect("Could not build request.");
-        let manga_callback = link.callback(
-            |response: Response<Json<Result<Vec<Chapter>, anyhow::Error>>>| {
-                let Json(data) = response.into_body();
-                Msg::FetchChaptersComplete(data)
-            },
-        );
-        let task =
-            FetchService::fetch(manga_request, manga_callback).expect("failed to start request");
+        let mut chapter_agent = ChapterAgent::bridge(link.callback(Msg::FetchChaptersComplete));
+        chapter_agent.send(Action::GetChapterList(props.manga_id));
         let state = State {
             chapters: None,
-            fetch_task: task,
+            chapter_agent,
         };
 
-        Self { link, state }
+        Self { state }
     }
 
     fn change(&mut self, _props: Self::Properties) -> ShouldRender {
@@ -60,17 +46,14 @@ impl Component for ChapterList {
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
+        trace!("{:?}", msg);
         match msg {
-            Msg::FetchChaptersComplete(data) => match data {
-                Ok(chapters) => self.state.chapters = Some(chapters),
-                Err(err) => error!("{}", err),
-            },
+            Msg::FetchChaptersComplete(data) => self.state.chapters = Some(data),
         }
         true
     }
 
     fn view(&self) -> Html {
-        info!("rendered!");
         match &self.state.chapters {
             Some(chapters) => html! {
                 for chapters.iter().map(|val| self.chapter_entry(&val))
