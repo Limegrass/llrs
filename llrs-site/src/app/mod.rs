@@ -11,7 +11,7 @@ use yew_router::{prelude::*, switch::Permissive};
 
 // We house the Agents here to persist the data inside of them
 // Otherwise the Agents would get destroyed when the last bridge gets destructed.
-pub struct App {
+pub(super) struct App {
     #[allow(dead_code)]
     manga_agent: Dispatcher<MangaAgent>,
     #[allow(dead_code)]

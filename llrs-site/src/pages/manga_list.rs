@@ -6,7 +6,7 @@ use std::rc::Rc;
 use yew::{prelude::*, Component, ComponentLink};
 use yew_router::components::RouterAnchor;
 
-pub struct State {
+pub(crate) struct State {
     mangas: Option<Rc<Vec<Rc<Manga>>>>,
     #[allow(dead_code)]
     manga_agent: Box<dyn Bridge<MangaAgent>>,
@@ -14,12 +14,12 @@ pub struct State {
 
 impl State {}
 
-pub struct MangaList {
+pub(crate) struct MangaList {
     state: State,
 }
 
 #[derive(Debug)]
-pub enum Msg {
+pub(crate) enum Msg {
     AgentResponse(Response),
 }
 

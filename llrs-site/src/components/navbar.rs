@@ -1,28 +1,28 @@
 use yew::prelude::*;
 
-pub struct Navbar {
+pub(crate) struct Navbar {
     link: ComponentLink<Self>,
     props: Props,
     state: State,
 }
-pub struct State {
+pub(super) struct State {
     is_menu_opened: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
-pub struct Props {
+pub(crate) struct Props {
     /// These will not display without clicking the burger in mobile
     /// navbar-item or navbar-dropdown should be applied to the children
     #[prop_or_default]
-    pub children: Children,
+    pub(crate) children: Children,
     /// These will always display in both mobile and desktop views
     /// navbar-item or navbar-dropdown should be applied to the children
     #[prop_or_default]
-    pub brand_children: Children,
+    pub(crate) brand_children: Children,
 }
 
 #[derive(Debug)]
-pub enum Msg {
+pub(crate) enum Msg {
     BurgerClick,
 }
 

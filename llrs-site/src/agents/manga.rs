@@ -11,18 +11,18 @@ use yew::{
 };
 
 #[derive(Debug)]
-pub enum Msg {
+pub(crate) enum Msg {
     FetchMangaComplete { mangas: Vec<Rc<Manga>> },
     Error,
 }
 
 #[derive(Debug)]
-pub enum Action {
+pub(crate) enum Action {
     GetMangaList,
     EmitListUpdate,
 }
 
-pub struct MangaAgent {
+pub(crate) struct MangaAgent {
     link: AgentLink<MangaAgent>,
     fetch_task: Option<FetchTask>,
     mangas: Option<Rc<Vec<Rc<Manga>>>>,
@@ -30,7 +30,7 @@ pub struct MangaAgent {
 }
 
 #[derive(Debug)]
-pub enum Response {
+pub(crate) enum Response {
     // TODO: Refactor to use a Map at some point
     MangaList { mangas: Rc<Vec<Rc<Manga>>> },
 }

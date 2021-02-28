@@ -1,7 +1,7 @@
 use yew_router::{switch::Permissive, Switch};
 
 #[derive(Debug, Switch, PartialEq, Clone)]
-pub enum AppRoute {
+pub(super) enum AppRoute {
     #[to = "/manga/{manga_id}/{chapter_number}/{page_number}"]
     MangaChapterPage {
         manga_id: i32,

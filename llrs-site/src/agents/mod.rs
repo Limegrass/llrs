@@ -1,3 +1,3 @@
-pub mod chapter;
-pub mod manga;
-pub mod page;
+pub(super) mod chapter;
+pub(super) mod manga;
+pub(super) mod page;

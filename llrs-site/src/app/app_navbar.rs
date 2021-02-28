@@ -19,7 +19,7 @@ struct State {
     mangas: Option<Rc<Vec<Rc<Manga>>>>,
 }
 
-pub enum Msg {
+pub(super) enum Msg {
     AgentResponse(MangaResponse),
 }
 

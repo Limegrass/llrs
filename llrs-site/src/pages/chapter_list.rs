@@ -9,7 +9,7 @@ use std::rc::Rc;
 use yew::{prelude::*, Component, ComponentLink};
 use yew_router::components::RouterAnchor;
 
-pub struct State {
+pub(super) struct State {
     mangas: Option<Rc<Vec<Rc<Manga>>>>,
     chapters: Option<Rc<Vec<Chapter>>>,
     #[allow(dead_code)]
@@ -18,20 +18,20 @@ pub struct State {
     manga_agent: Box<dyn Bridge<MangaAgent>>,
 }
 
-pub struct ChapterList {
+pub(crate) struct ChapterList {
     state: State,
     props: Props,
 }
 
 #[derive(Debug)]
-pub enum Msg {
+pub(crate) enum Msg {
     FetchChaptersComplete(Rc<Vec<Chapter>>),
     FetchMangaComplete(MangaResponse),
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
-pub struct Props {
-    pub manga_id: i32,
+pub(crate) struct Props {
+    pub(crate) manga_id: i32,
 }
 
 impl Component for ChapterList {

@@ -1,20 +1,20 @@
 use yew::{prelude::*, virtual_dom::VNode};
 
-pub struct Breadcrumb {
+pub(crate) struct Breadcrumb {
     props: Props,
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
-pub struct Props {
+pub(crate) struct Props {
     #[prop_or_default]
-    pub children: Children,
+    pub(crate) children: Children,
     #[prop_or_default]
-    pub separator: Separator,
+    pub(crate) separator: Separator,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
-pub enum Separator {
+pub(crate) enum Separator {
     /// / - U+0002F
     ForwardSlash,
     /// → - U+02192

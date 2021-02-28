@@ -11,7 +11,7 @@ use yew::{
 };
 
 #[derive(Debug)]
-pub enum Msg {
+pub(crate) enum Msg {
     FetchChapterComplete {
         manga_id: i32,
         chapters: Vec<Chapter>,
@@ -20,13 +20,13 @@ pub enum Msg {
 }
 
 #[derive(Debug)]
-pub enum Action {
+pub(crate) enum Action {
     GetChapterList { manga_id: i32 },
     EmitListUpdate { manga_id: i32 },
 }
 
 // TODO: Consider a NewType for the i32s
-pub struct ChapterAgent {
+pub(crate) struct ChapterAgent {
     link: AgentLink<ChapterAgent>,
     fetch_tasks: HashMap<i32, FetchTask>,
     chapters: HashMap<i32, Rc<Vec<Chapter>>>,

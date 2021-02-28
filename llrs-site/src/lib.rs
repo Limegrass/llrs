@@ -1,3 +1,4 @@
+#![deny(unreachable_pub)]
 #![recursion_limit = "512"]
 
 mod agents;

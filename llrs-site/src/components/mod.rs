@@ -1,2 +1,2 @@
-pub mod breadcrumb;
-pub mod navbar;
+pub(crate) mod breadcrumb;
+pub(crate) mod navbar;

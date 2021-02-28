@@ -15,7 +15,7 @@ use yew_router::{
     prelude::{Route, RouteAgentDispatcher},
 };
 
-pub struct State {
+pub(crate) struct State {
     pages: Option<Rc<Vec<Page>>>,
     chapters: Option<Rc<Vec<Chapter>>>,
     view_format: ViewFormat,
@@ -29,7 +29,7 @@ enum ViewFormat {
     Long,
 }
 
-pub struct MangaPage {
+pub(crate) struct MangaPage {
     #[allow(dead_code)]
     page_agent: Box<dyn Bridge<PageAgent>>,
     #[allow(dead_code)]
@@ -43,7 +43,7 @@ pub struct MangaPage {
 }
 
 #[derive(Debug)]
-pub enum Msg {
+pub(crate) enum Msg {
     FetchPagesComplete(Rc<Vec<Page>>),
     PreloadNextImage { page_number: usize },
     FetchChapterComplete(Rc<Vec<Chapter>>),
@@ -52,10 +52,10 @@ pub enum Msg {
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
-pub struct Props {
-    pub manga_id: i32,
-    pub chapter_number: String,
-    pub page_number: usize,
+pub(crate) struct Props {
+    pub(crate) manga_id: i32,
+    pub(crate) chapter_number: String,
+    pub(crate) page_number: usize,
 }
 
 impl Component for MangaPage {

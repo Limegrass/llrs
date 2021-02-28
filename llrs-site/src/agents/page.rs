@@ -11,7 +11,7 @@ use yew::{
 };
 
 #[derive(Debug)]
-pub enum Msg {
+pub(crate) enum Msg {
     FetchPageComplete {
         pages: Vec<Page>,
         manga_id: i32,
@@ -21,7 +21,7 @@ pub enum Msg {
 }
 
 #[derive(Debug)]
-pub enum Action {
+pub(crate) enum Action {
     GetPageList {
         manga_id: i32,
         chapter_number: String,
@@ -33,7 +33,7 @@ pub enum Action {
 }
 
 type DataKey = (i32, String);
-pub struct PageAgent {
+pub(crate) struct PageAgent {
     link: AgentLink<PageAgent>,
     fetch_tasks: HashMap<DataKey, FetchTask>,
     chapter_pages: HashMap<DataKey, Rc<Vec<Page>>>,
