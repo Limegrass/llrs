@@ -1,6 +1,9 @@
-use crate::pages::{ChapterList, Home, MangaPage};
 use crate::{
-    agents::manga::MangaAgent,
+    agents::manga::Response as MangaResponse,
+    pages::{ChapterList, Home, MangaPage},
+};
+use crate::{
+    agents::manga::{Action as MangaAction, MangaAgent},
     components::{
         breadcrumb::{Breadcrumb, Separator},
         navbar::Navbar,
@@ -10,7 +13,9 @@ use crate::{
     agents::{chapter::ChapterAgent, page::PageAgent},
     pages::not_found,
 };
+use llrs_model::Manga;
 use log::trace;
+use std::rc::Rc;
 use yew::{agent::Dispatcher, html::ChildrenRenderer, prelude::*};
 use yew_router::{components::RouterAnchor, prelude::*, switch::Permissive, Switch};
 
@@ -50,11 +55,20 @@ pub struct App {
     page_agent: Dispatcher<PageAgent>,
 }
 
+struct State {
+    mangas: Option<Rc<Vec<Rc<Manga>>>>,
+}
+
+#[derive(Debug)]
+pub enum Msg {
+    AgentResponse(MangaResponse),
+}
+
 impl Component for App {
     type Message = ();
     type Properties = ();
 
-    fn create(_: Self::Properties, _: ComponentLink<Self>) -> Self {
+    fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         let manga_agent = MangaAgent::dispatcher();
         let chapter_agent = ChapterAgent::dispatcher();
         let page_agent = PageAgent::dispatcher();
@@ -69,7 +83,7 @@ impl Component for App {
         false
     }
 
-    fn update(&mut self, _: Self::Message) -> ShouldRender {
+    fn update(&mut self, msg: Self::Message) -> ShouldRender {
         true
     }
 
@@ -79,13 +93,9 @@ impl Component for App {
         let render = Router::render(|route: AppRoute| {
             trace!("Route: {:?}", &route);
             let content = render_main_content(&route);
-            let brand_links = get_brand_links(&route);
-            let navbar = html! {
-                <Navbar brand_children={brand_links} />
-            };
             html! {
                 <div class="container">
-                    {navbar}
+                    <AppNavbar route=&route />
                     {content}
                 </div>
             }
@@ -93,6 +103,56 @@ impl Component for App {
 
         html! {
             <Router<AppRoute, ()> render=render redirect=redirect />
+        }
+    }
+}
+
+struct AppNavbar {
+    #[allow(dead_code)]
+    manga_agent: Box<dyn Bridge<MangaAgent>>,
+    link: ComponentLink<Self>,
+    state: State,
+    props: Props,
+}
+#[derive(Debug, Clone, PartialEq, Properties)]
+struct Props {
+    route: AppRoute,
+}
+
+impl Component for AppNavbar {
+    type Message = Msg;
+
+    type Properties = Props;
+
+    fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+        let mut manga_agent = MangaAgent::bridge(link.callback(Msg::AgentResponse));
+        manga_agent.send(MangaAction::GetMangaList);
+        Self {
+            manga_agent,
+            link,
+            props,
+            state: State { mangas: None },
+        }
+    }
+
+    fn update(&mut self, msg: Self::Message) -> ShouldRender {
+        match msg {
+            Msg::AgentResponse(response) => match response {
+                MangaResponse::MangaList { mangas } => self.state.mangas = Some(mangas),
+            },
+        };
+        true
+    }
+
+    fn change(&mut self, props: Self::Properties) -> ShouldRender {
+        self.props = props;
+        true
+    }
+
+    fn view(&self) -> Html {
+        let brand_links = self.get_brand_links(&self.props.route);
+        html! {
+            <Navbar brand_children={brand_links} />
         }
     }
 }
@@ -136,70 +196,94 @@ struct BreadcrumbLink {
     link_text: String,
 }
 
-// TODO: Use Agents to get names of mangas/chapters
-fn get_brand_links(route: &AppRoute) -> Children {
-    let brand_logo = html! {
-        <Anchor classes="navbar-item" route=AppRoute::Home>
-            <img src=&LLRS_BRAND_LOGO_URL alt="llrs logo" />
-        </Anchor>
-    };
-    // Bulma ONLY formats the text properly with anchors
-    let links = match route {
-        AppRoute::Home => vec![BreadcrumbLink {
-            route: AppRoute::Home,
-            link_text: "llrs".to_owned(),
-        }],
-        AppRoute::ChapterList(manga_id) => vec![
-            BreadcrumbLink {
+impl AppNavbar {
+    // TODO: Use Agents to get names of mangas/chapters
+    fn get_brand_links(&self, route: &AppRoute) -> Children {
+        let brand_logo = html! {
+            <Anchor classes="navbar-item" route=AppRoute::Home>
+                <img src=&LLRS_BRAND_LOGO_URL alt="llrs logo" />
+            </Anchor>
+        };
+        // Bulma ONLY formats the text properly with anchors
+        let links = match route {
+            AppRoute::Home => vec![BreadcrumbLink {
                 route: AppRoute::Home,
                 link_text: "llrs".to_owned(),
-            },
-            BreadcrumbLink {
-                route: AppRoute::ChapterList(*manga_id),
-                link_text: manga_id.to_string(),
-            },
-        ],
-        AppRoute::MangaChapterPage {
-            manga_id,
-            chapter_number,
-            page_number: _,
-        }
-        | AppRoute::MangaChapter {
-            manga_id,
-            chapter_number,
-        } => vec![
-            BreadcrumbLink {
-                route: AppRoute::Home,
-                link_text: "llrs".to_owned(),
-            },
-            BreadcrumbLink {
-                route: AppRoute::ChapterList(*manga_id),
-                link_text: manga_id.to_string(),
-            },
-            BreadcrumbLink {
-                route: AppRoute::MangaChapter {
-                    manga_id: *manga_id,
-                    chapter_number: chapter_number.to_owned(),
+            }],
+            AppRoute::ChapterList(manga_id) => vec![
+                BreadcrumbLink {
+                    route: AppRoute::Home,
+                    link_text: "llrs".to_owned(),
                 },
-                link_text: chapter_number.to_owned(),
-            },
-        ],
-        AppRoute::NotFound(Permissive(_)) => vec![BreadcrumbLink {
-            route: AppRoute::Home,
-            link_text: "llrs".to_owned(),
-        }],
-    };
+                BreadcrumbLink {
+                    route: AppRoute::ChapterList(*manga_id),
+                    link_text: self
+                        .state
+                        .mangas
+                        .as_ref()
+                        .map(|mangas| {
+                            mangas
+                                .iter()
+                                .find(|manga| manga.manga_id == *manga_id)
+                                .map(|manga| manga.manga_name.to_owned())
+                                .unwrap_or(manga_id.to_string())
+                        })
+                        .unwrap_or(manga_id.to_string()),
+                },
+            ],
+            AppRoute::MangaChapterPage {
+                manga_id,
+                chapter_number,
+                page_number: _,
+            }
+            | AppRoute::MangaChapter {
+                manga_id,
+                chapter_number,
+            } => vec![
+                BreadcrumbLink {
+                    route: AppRoute::Home,
+                    link_text: "llrs".to_owned(),
+                },
+                BreadcrumbLink {
+                    route: AppRoute::ChapterList(*manga_id),
+                    link_text: self
+                        .state
+                        .mangas
+                        .as_ref()
+                        .map(|mangas| {
+                            mangas
+                                .iter()
+                                .find(|manga| manga.manga_id == *manga_id)
+                                .map(|manga| manga.manga_name.to_owned())
+                                .unwrap_or(manga_id.to_string())
+                        })
+                        .unwrap_or(manga_id.to_string()),
+                },
+                BreadcrumbLink {
+                    route: AppRoute::MangaChapter {
+                        manga_id: *manga_id,
+                        chapter_number: chapter_number.to_owned(),
+                    },
+                    link_text: format!("Chapter {}", chapter_number.to_owned()),
+                },
+            ],
+            AppRoute::NotFound(Permissive(_)) => vec![BreadcrumbLink {
+                route: AppRoute::Home,
+                link_text: "llrs".to_owned(),
+            }],
+        };
 
-    ChildrenRenderer::new(vec![html! {
-        <>
-            {brand_logo}
-            <div class="navbar-item">
-                <Breadcrumb separator=Separator::Succeeds>
-                    { links.into_iter().map(to_route_anchor).collect::<Vec<Html>>()}
-                </Breadcrumb>
-            </div>
-        </>
-    }])
+        ChildrenRenderer::new(vec![html! {
+            <>
+                {brand_logo}
+                <div class="navbar-item">
+                    <Breadcrumb separator=Separator::Succeeds>
+                        { links.into_iter().map(to_route_anchor).collect::<Vec<Html>>()}
+                    </Breadcrumb>
+                </div>
+            </>
+        }])
+    }
 }
 
 fn to_route_anchor(link: BreadcrumbLink) -> Html {
