@@ -225,14 +225,25 @@ impl AppNavbar {
 
     fn get_menu_links(&self) -> Html {
         let manga = self.get_selected_manga();
-        manga.as_ref().map_or(html! {}, |m| {
+        let discord_link = html! {
+            <a class="navbar-item" href=env!("LLRS_DISCORD_URL")>{"Join the Discord"}</a>
+        };
+        let manga_link = manga.as_ref().map_or(html! {}, |m| {
             let buy_link = m.purchase_url.as_str();
             if buy_link.len() > 0 {
-                html! { <a class="navbar-item" href=buy_link>{"Support the Author"}</a> }
+                html! {
+                    <a class="navbar-item" href=buy_link>{"Support the Author"}</a>
+                }
             } else {
                 html! {}
             }
-        })
+        });
+        html! {
+            <>
+                {manga_link}
+                {discord_link}
+            </>
+        }
     }
 
     // TODO: Use Agents to get names of mangas/chapters
