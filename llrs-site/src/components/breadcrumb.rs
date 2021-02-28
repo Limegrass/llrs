@@ -37,14 +37,15 @@ impl Default for Separator {
         Separator::ForwardSlash
     }
 }
+
 impl Separator {
     fn class_name(&self) -> &'static str {
         match self {
-            Separator::ForwardSlash => "",
-            Separator::Arrow => "has-arrow-separator",
-            Separator::Bullet => "has-bullet-separator",
-            Separator::Dot => "has-dot-separator",
-            Separator::Succeeds => "has-succeeds-separator",
+            Separator::ForwardSlash => "breadcrumb",
+            Separator::Arrow => "breadcrumb has-arrow-separator",
+            Separator::Bullet => "breadcrumb has-bullet-separator",
+            Separator::Dot => "breadcrumb has-dot-separator",
+            Separator::Succeeds => "breadcrumb has-succeeds-separator",
         }
     }
 }
@@ -68,10 +69,9 @@ impl Component for Breadcrumb {
     }
 
     fn view(&self) -> Html {
-        let mut classes = String::from("breadcrumb ");
-        classes.push_str(self.props.separator.class_name());
+        let classes = self.props.separator.class_name();
         html! {
-            <nav class=&classes aria-label="breadcrumbs">
+            <nav class=classes aria-label="breadcrumbs">
                 <ul>
                     {for self.props.children.iter().map(|child| wrap_as_li(child))}
                 </ul>
