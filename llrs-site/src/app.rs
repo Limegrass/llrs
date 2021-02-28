@@ -68,7 +68,7 @@ impl Component for App {
     type Message = ();
     type Properties = ();
 
-    fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
+    fn create(_: Self::Properties, _: ComponentLink<Self>) -> Self {
         let manga_agent = MangaAgent::dispatcher();
         let chapter_agent = ChapterAgent::dispatcher();
         let page_agent = PageAgent::dispatcher();
@@ -79,11 +79,11 @@ impl Component for App {
         }
     }
 
-    fn change(&mut self, _props: Self::Properties) -> ShouldRender {
+    fn change(&mut self, _: Self::Properties) -> ShouldRender {
         false
     }
 
-    fn update(&mut self, msg: Self::Message) -> ShouldRender {
+    fn update(&mut self, _: Self::Message) -> ShouldRender {
         true
     }
 
@@ -110,10 +110,12 @@ impl Component for App {
 struct AppNavbar {
     #[allow(dead_code)]
     manga_agent: Box<dyn Bridge<MangaAgent>>,
+    #[allow(dead_code)]
     link: ComponentLink<Self>,
     state: State,
     props: Props,
 }
+
 #[derive(Debug, Clone, PartialEq, Properties)]
 struct Props {
     route: AppRoute,

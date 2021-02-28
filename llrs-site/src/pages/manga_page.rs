@@ -23,6 +23,7 @@ pub struct State {
     starting_page_number: Option<usize>,
 }
 
+#[allow(dead_code)]
 enum ViewFormat {
     Single,
     Long,

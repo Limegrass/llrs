@@ -4,12 +4,6 @@ pub struct Breadcrumb {
     props: Props,
 }
 
-pub enum Icon {
-    Home,
-    Book,
-    Images,
-}
-
 #[derive(Debug, Clone, PartialEq, Properties)]
 pub struct Props {
     #[prop_or_default]
@@ -18,6 +12,7 @@ pub struct Props {
     pub separator: Separator,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Separator {
     /// / - U+0002F
@@ -55,11 +50,11 @@ impl Component for Breadcrumb {
 
     type Properties = Props;
 
-    fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
+    fn create(props: Self::Properties, _: ComponentLink<Self>) -> Self {
         Self { props }
     }
 
-    fn update(&mut self, msg: Self::Message) -> ShouldRender {
+    fn update(&mut self, _: Self::Message) -> ShouldRender {
         true
     }
 
