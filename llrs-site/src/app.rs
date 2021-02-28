@@ -195,7 +195,7 @@ fn get_brand_links(route: &AppRoute) -> Children {
             {brand_logo}
             <div class="navbar-item">
                 <Breadcrumb separator=Separator::Succeeds>
-                    { links.into_iter().map(to_route_anchor).collect::<Html>()}
+                    { links.into_iter().map(to_route_anchor).collect::<Vec<Html>>()}
                 </Breadcrumb>
             </div>
         </>
