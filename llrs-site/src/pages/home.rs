@@ -1,4 +1,4 @@
-use crate::agents::manga::{Action, MangaAgent};
+use crate::agents::manga::{Action, MangaAgent, Response};
 use crate::app::AppRoute;
 use llrs_model::Manga;
 use log::*;
@@ -20,7 +20,7 @@ pub struct Home {
 
 #[derive(Debug)]
 pub enum Msg {
-    FetchMangasComplete(Rc<Vec<Manga>>),
+    AgentResponse(Response),
 }
 
 impl Component for Home {
@@ -28,7 +28,7 @@ impl Component for Home {
     type Properties = ();
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let mut manga_agent = MangaAgent::bridge(link.callback(Msg::FetchMangasComplete));
+        let mut manga_agent = MangaAgent::bridge(link.callback(Msg::AgentResponse));
         manga_agent.send(Action::GetMangaList);
         let state = State {
             mangas: None,
@@ -45,7 +45,9 @@ impl Component for Home {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         trace!("{:?}", msg);
         match msg {
-            Msg::FetchMangasComplete(data) => self.state.mangas = Some(data),
+            Msg::AgentResponse(response) => match response {
+                Response::MangaList { mangas } => self.state.mangas = Some(mangas),
+            },
         }
         true
     }

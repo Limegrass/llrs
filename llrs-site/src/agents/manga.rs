@@ -4,7 +4,7 @@ use std::{collections::HashSet, rc::Rc};
 use yew::{
     format::{Json, Nothing},
     services::{
-        fetch::{FetchTask, Request, Response},
+        fetch::{FetchTask, Request as FetchRequest, Response as FetchResponse},
         FetchService,
     },
     worker::*,
@@ -29,11 +29,16 @@ pub struct MangaAgent {
     subscribers: HashSet<HandlerId>,
 }
 
+#[derive(Debug)]
+pub enum Response {
+    MangaList { mangas: Rc<Vec<Manga>> },
+}
+
 impl Agent for MangaAgent {
     type Reach = Context<Self>;
     type Message = Msg;
     type Input = Action;
-    type Output = Rc<Vec<Manga>>;
+    type Output = Response;
 
     fn create(link: AgentLink<Self>) -> Self {
         Self {
@@ -59,7 +64,10 @@ impl Agent for MangaAgent {
         match action {
             Action::GetMangaList => {
                 if let Some(mangas) = &self.mangas {
-                    self.link.respond(requester, Rc::clone(&mangas));
+                    let response = Response::MangaList {
+                        mangas: Rc::clone(&mangas),
+                    };
+                    self.link.respond(requester, response);
                 } else if self.fetch_task.is_none() {
                     self.begin_data_fetch()
                 }
@@ -67,7 +75,10 @@ impl Agent for MangaAgent {
             Action::EmitListUpdate => {
                 if let Some(mangas) = &self.mangas {
                     for sub in self.subscribers.iter() {
-                        self.link.respond(*sub, Rc::clone(&mangas));
+                        let response = Response::MangaList {
+                            mangas: Rc::clone(&mangas),
+                        };
+                        self.link.respond(*sub, response);
                     }
                 }
             }
@@ -92,7 +103,7 @@ impl MangaAgent {
     }
 
     fn parse_manga_fetch_to_msg(
-        response: Response<Json<Result<Vec<Manga>, anyhow::Error>>>,
+        response: FetchResponse<Json<Result<Vec<Manga>, anyhow::Error>>>,
     ) -> Msg {
         let Json(data) = response.into_body();
         match data {
@@ -106,9 +117,9 @@ impl MangaAgent {
 
     fn get_request_manga_task(
         &self,
-        result_handler: fn(Response<Json<Result<Vec<Manga>, anyhow::Error>>>) -> Msg,
+        result_handler: fn(FetchResponse<Json<Result<Vec<Manga>, anyhow::Error>>>) -> Msg,
     ) -> Result<FetchTask, anyhow::Error> {
-        let request = Request::get("http://localhost:42069")
+        let request = FetchRequest::get("http://localhost:42069")
             .body(Nothing)
             .expect("Could not build request.");
         let callback = self.link.callback(result_handler);
