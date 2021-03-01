@@ -16,7 +16,7 @@ pub(crate) enum Msg {
         manga_id: i32,
         chapters: Vec<Chapter>,
     },
-    Error,
+    Error(anyhow::Error),
 }
 
 #[derive(Debug)]
@@ -51,7 +51,7 @@ impl Agent for ChapterAgent {
     fn update(&mut self, msg: Self::Message) {
         trace!("{:?}", msg);
         match msg {
-            Msg::Error => {}
+            Msg::Error(error) => error!("{}", error),
             Msg::FetchChapterComplete { manga_id, chapters } => {
                 self.chapters.insert(manga_id, Rc::new(chapters));
                 self.link.send_input(Action::EmitListUpdate { manga_id });
@@ -65,8 +65,12 @@ impl Agent for ChapterAgent {
                 if let Some(chapters) = &self.chapters.get(&manga_id) {
                     self.link.respond(requester, Rc::clone(&chapters));
                 } else if self.fetch_tasks.get(&manga_id).is_none() {
-                    let fetch_task = self.build_fetch_task(manga_id);
-                    self.fetch_tasks.insert(manga_id, fetch_task);
+                    match self.build_fetch_task(manga_id) {
+                        Ok(fetch_task) => {
+                            self.fetch_tasks.insert(manga_id, fetch_task);
+                        }
+                        Err(error) => error!("{}", error),
+                    }
                 }
                 self.subscribers.insert(requester, manga_id);
             }
@@ -88,22 +92,18 @@ impl Agent for ChapterAgent {
 }
 
 impl ChapterAgent {
-    fn build_fetch_task(&mut self, manga_id: i32) -> FetchTask {
-        let request = Request::get(format!("http://localhost:42069/manga/{}", manga_id))
-            .body(Nothing)
-            .expect("Could not build request.");
+    fn build_fetch_task(&mut self, manga_id: i32) -> Result<FetchTask, anyhow::Error> {
+        let request =
+            Request::get(format!("http://localhost:42069/manga/{}", manga_id)).body(Nothing)?;
         let callback = self.link.callback(
             move |response: Response<Json<Result<Vec<Chapter>, anyhow::Error>>>| {
                 let Json(data) = response.into_body();
                 match data {
                     Ok(chapters) => Msg::FetchChapterComplete { manga_id, chapters },
-                    Err(error) => {
-                        error!("{}", error);
-                        Msg::Error
-                    }
+                    Err(error) => Msg::Error(error),
                 }
             },
         );
-        FetchService::fetch(request, callback).expect("Failed to build request")
+        FetchService::fetch(request, callback)
     }
 }
