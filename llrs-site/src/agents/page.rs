@@ -17,7 +17,7 @@ pub(crate) enum Msg {
         manga_id: i32,
         chapter_number: String,
     },
-    Error,
+    Error(anyhow::Error),
 }
 
 #[derive(Debug)]
@@ -58,7 +58,7 @@ impl Agent for PageAgent {
     fn update(&mut self, msg: Self::Message) {
         trace!("{:?}", msg);
         match msg {
-            Msg::Error => {}
+            Msg::Error(error) => error!("{}", error),
             Msg::FetchPageComplete {
                 pages,
                 manga_id,
@@ -85,8 +85,12 @@ impl Agent for PageAgent {
                 if let Some(pages) = &self.chapter_pages.get(&key) {
                     self.link.respond(requester, Rc::clone(&pages));
                 } else if self.fetch_tasks.get(&key).is_none() {
-                    let fetch_task = self.build_fetch_task(manga_id, chapter_number);
-                    self.fetch_tasks.insert(key.clone(), fetch_task);
+                    match self.build_fetch_task(manga_id, chapter_number) {
+                        Ok(fetch_task) => {
+                            self.fetch_tasks.insert(key.clone(), fetch_task);
+                        }
+                        Err(error) => error!("{}", error),
+                    }
                 }
                 self.subscribers.insert(requester, key);
             }
@@ -112,13 +116,16 @@ impl Agent for PageAgent {
 }
 
 impl PageAgent {
-    fn build_fetch_task(&mut self, manga_id: i32, chapter_number: String) -> FetchTask {
+    fn build_fetch_task(
+        &mut self,
+        manga_id: i32,
+        chapter_number: String,
+    ) -> Result<FetchTask, anyhow::Error> {
         let request = Request::get(format!(
             "http://localhost:42069/manga/{}/{}",
             manga_id, chapter_number
         ))
-        .body(Nothing)
-        .expect("Could not build request.");
+        .body(Nothing)?;
         let callback = self.link.callback(
             move |response: Response<Json<Result<Vec<Page>, anyhow::Error>>>| {
                 let Json(data) = response.into_body();
@@ -128,13 +135,10 @@ impl PageAgent {
                         manga_id,
                         chapter_number: chapter_number.to_owned(),
                     },
-                    Err(error) => {
-                        error!("{}", error);
-                        Msg::Error
-                    }
+                    Err(error) => Msg::Error(error),
                 }
             },
         );
-        FetchService::fetch(request, callback).expect("Could not build request.")
+        FetchService::fetch(request, callback)
     }
 }
