@@ -1,3 +1,4 @@
+use super::progress::progress_bar;
 use crate::agents::{
     chapter::{Action as ChapterAction, ChapterAgent},
     page::{Action as PageAction, PageAgent},
@@ -319,7 +320,7 @@ impl Component for MangaPage {
     fn view(&self) -> Html {
         match &self.state.pages {
             Some(pages) => self.render_view(pages),
-            None => html! {"Fetching"},
+            None => progress_bar(),
         }
     }
 }

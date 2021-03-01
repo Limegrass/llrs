@@ -1,3 +1,4 @@
+use super::progress::progress_bar;
 use crate::agents::manga::{Action, MangaAgent, Response};
 use crate::route::AppRoute;
 use llrs_model::Manga;
@@ -53,20 +54,11 @@ impl Component for MangaList {
     }
 
     fn view(&self) -> Html {
-        // TODO: On navigating to index,
-        // call API (locally running libllrs)and display links to each
-        let view = match &self.state.mangas {
+        match &self.state.mangas {
             Some(mangas) => html! {
                 {for mangas.chunks(2).map(|chunk| column_spread(chunk))}
             },
-            None => html! {
-                <progress max="100" class="progress is-primary" />
-            },
-        };
-        html! {
-            <div class="container">
-                {view}
-            </div>
+            None => progress_bar(),
         }
     }
 }

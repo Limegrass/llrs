@@ -1,3 +1,4 @@
+use super::progress::progress_bar;
 use crate::agents::{
     chapter::{Action as ChapterAction, ChapterAgent},
     manga::{Action as MangaAction, MangaAgent, Response as MangaResponse},
@@ -89,7 +90,6 @@ impl Component for ChapterList {
             .unwrap_or("");
         match &self.state.chapters {
             Some(chapters) => html! {
-                // TODO: why doesn't this center the image? 100% in the mean time
                 <div class="container">
                     <figure class="container manga-cover-image">
                         <img src=cover_image_url />
@@ -105,7 +105,7 @@ impl Component for ChapterList {
                     </table>
                 </div>
             },
-            None => html! {"Fetching"},
+            None => progress_bar(),
         }
     }
 }
