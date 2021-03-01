@@ -175,7 +175,9 @@ impl Component for MangaPage {
                                     let link = self.link.clone();
                                     let load_next_image = Closure::once(Box::new(move || {
                                         link.send_message(Msg::PreloadNextImage {
-                                            page_number: page_number + 1,
+                                            page_number: page_index
+                                                .checked_add(1)
+                                                .unwrap_or(page_index),
                                         });
                                     }));
                                     image_element
@@ -212,7 +214,9 @@ impl Component for MangaPage {
                             let previous_chapter_index =
                                 current_chapter_index.map(|current_chapter_index| {
                                     if current_chapter_index != 0 {
-                                        current_chapter_index - 1
+                                        current_chapter_index
+                                            .checked_sub(1)
+                                            .unwrap_or(current_chapter_index)
                                     } else {
                                         current_chapter_index
                                     }
@@ -243,7 +247,13 @@ impl Component for MangaPage {
                     let route = AppRoute::MangaChapterPage {
                         manga_id: self.props.manga_id,
                         chapter_number: self.props.chapter_number.to_owned(),
-                        page_number: max(1, self.props.page_number - 1),
+                        page_number: max(
+                            1,
+                            self.props
+                                .page_number
+                                .checked_sub(1)
+                                .unwrap_or(self.props.page_number),
+                        ),
                     };
                     self.route_dispatcher
                         .send(RouteRequest::ChangeRoute(Route::from(route)));
@@ -269,8 +279,15 @@ impl Component for MangaPage {
                             });
                             let next_chapter_index =
                                 current_chapter_index.map(|current_chapter_index| {
-                                    if current_chapter_index != chapter_list.len() - 1 {
-                                        current_chapter_index + 1
+                                    if current_chapter_index
+                                        != chapter_list
+                                            .len()
+                                            .checked_sub(1)
+                                            .unwrap_or(current_chapter_index)
+                                    {
+                                        current_chapter_index
+                                            .checked_add(1)
+                                            .unwrap_or(current_chapter_index)
                                     } else {
                                         current_chapter_index
                                     }
@@ -365,7 +382,9 @@ impl MangaPage {
     }
 
     fn manga_page(&self, page: &Page) -> Html {
-        let next_page_number = page.page_number as usize + 1;
+        let next_page_number = (page.page_number as usize)
+            .checked_add(1)
+            .unwrap_or(page.page_number as usize);
 
         html! {
             <div class="container">
