@@ -3,16 +3,7 @@
 @import "https://jenil.github.io/bulmaswatch/darkly/bulmaswatch.min.css";
 $translucent-white: rgba(255, 255, 255, .8);
 $translucent-black: rgba(0, 0, 0, .8);
-$quality-llrs-purple: #684580;
 $bulma-tr-alt: #282f2f;
-
-.fixed-container {
-    width: 100%;
-    height: 100%;
-    position: fixed;
-    top: 0;
-    left: 0;
-}
 
 @mixin flex-center() {
     display: flex;
@@ -20,17 +11,19 @@ $bulma-tr-alt: #282f2f;
     align-items: center;
 }
 
+.flex-center {
+    @include flex-center();
+}
+
 .manga-cover-image {
     @include flex-center();
     max-width: 760px;
 }
 
-
 .not-found {
+    position: absolute;
     margin: auto;
-    width: 50%;
-    font-size: 10vw;
-    background: $quality-llrs-purple;
+    font-size: 8vw;
     text-align: center;
 }
 
