@@ -3,12 +3,12 @@ use crate::agents::manga::{Action, MangaAgent, Response};
 use crate::route::AppRoute;
 use llrs_model::Manga;
 use log::*;
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 use yew::{prelude::*, Component, ComponentLink};
 use yew_router::components::RouterAnchor;
 
 pub(crate) struct State {
-    mangas: Option<Rc<Vec<Rc<Manga>>>>,
+    mangas: Option<Rc<HashMap<i32, Manga>>>,
     #[allow(dead_code)]
     manga_agent: Box<dyn Bridge<MangaAgent>>,
 }
@@ -47,7 +47,7 @@ impl Component for MangaList {
         trace!("{:?}", msg);
         match msg {
             Msg::AgentResponse(response) => match response {
-                Response::MangaList { mangas } => self.state.mangas = Some(mangas),
+                Response::MangaMap { mangas } => self.state.mangas = Some(mangas),
             },
         }
         true
@@ -55,16 +55,22 @@ impl Component for MangaList {
 
     fn view(&self) -> Html {
         match &self.state.mangas {
-            Some(mangas) => html! {
-                {for mangas.chunks(2).map(|chunk| column_spread(chunk))}
-            },
+            Some(mangas) => {
+                let mangas = mangas
+                    .iter()
+                    .map(|(_, manga)| manga)
+                    .collect::<Vec<&Manga>>();
+                html! {
+                    {for mangas.chunks(2).map(|chunk| column_spread(chunk))}
+                }
+            }
             None => progress_bar(),
         }
     }
 }
 
 /// Spreads a chunk as a set of columns
-fn column_spread(mangas: &[Rc<Manga>]) -> Html {
+fn column_spread(mangas: &[&Manga]) -> Html {
     html! {
         <div class="columns level">
             {for mangas.iter().map(|manga| as_column_level_item(manga_entry(manga)))}

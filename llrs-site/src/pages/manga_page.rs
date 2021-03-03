@@ -118,6 +118,7 @@ impl Component for MangaPage {
         trace!("{:?}", msg);
         match msg {
             Msg::FetchPagesComplete(data) => {
+                info!("page {:p}", &data);
                 if self.state.should_set_to_last_page || data.len() < self.props.page_number {
                     let route = AppRoute::MangaChapterPage {
                         manga_id: self.props.manga_id,

@@ -7,7 +7,7 @@ use crate::{
     },
 };
 use llrs_model::Manga;
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 use yew::{html::ChildrenRenderer, prelude::*};
 use yew_router::{components::RouterAnchor, switch::Permissive};
 
@@ -16,7 +16,7 @@ const LLRS_BRAND_LOGO_URL: &'static str = env!("LLRS_BRAND_LOGO_URL");
 type Anchor = RouterAnchor<AppRoute>;
 
 struct State {
-    mangas: Option<Rc<Vec<Rc<Manga>>>>,
+    mangas: Option<Rc<HashMap<i32, Manga>>>,
 }
 
 pub(super) enum Msg {
@@ -56,7 +56,7 @@ impl Component for AppNavbar {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::AgentResponse(response) => match response {
-                MangaResponse::MangaList { mangas } => self.state.mangas = Some(mangas),
+                MangaResponse::MangaMap { mangas } => self.state.mangas = Some(mangas),
             },
         };
         true
@@ -86,7 +86,7 @@ struct BreadcrumbLink {
 }
 
 impl AppNavbar {
-    fn get_selected_manga(&self) -> Option<Rc<Manga>> {
+    fn get_selected_manga(&self) -> Option<&Manga> {
         match self.props.route {
             AppRoute::ChapterList { manga_id }
             | AppRoute::MangaChapterPage {
@@ -97,12 +97,11 @@ impl AppNavbar {
             | AppRoute::MangaChapter {
                 manga_id,
                 chapter_number: _,
-            } => self.state.mangas.as_ref().map_or(None, |mangas| {
-                mangas
-                    .iter()
-                    .find(|manga| manga.manga_id == manga_id)
-                    .map(|manga_ref| Rc::clone(manga_ref))
-            }),
+            } => self
+                .state
+                .mangas
+                .as_ref()
+                .map_or(None, |mangas| mangas.get(&manga_id)),
             _ => None,
         }
     }
@@ -140,73 +139,70 @@ impl AppNavbar {
             </Anchor>
         };
         // Bulma ONLY formats the text properly with anchors
-        let links = match &self.props.route {
-            AppRoute::MangaList => vec![BreadcrumbLink {
-                route: AppRoute::MangaList,
-                link_text: "llrs".to_owned(),
-            }],
-            AppRoute::ChapterList { manga_id } => vec![
-                BreadcrumbLink {
+        let links =
+            match &self.props.route {
+                AppRoute::MangaList => vec![BreadcrumbLink {
                     route: AppRoute::MangaList,
                     link_text: "llrs".to_owned(),
-                },
-                BreadcrumbLink {
-                    route: AppRoute::ChapterList {
-                        manga_id: *manga_id,
+                }],
+                AppRoute::ChapterList { manga_id } => vec![
+                    BreadcrumbLink {
+                        route: AppRoute::MangaList,
+                        link_text: "llrs".to_owned(),
                     },
-                    link_text: self
-                        .state
-                        .mangas
-                        .as_ref()
-                        .map_or(manga_id.to_string(), |mangas| {
-                            mangas
-                                .iter()
-                                .find(|manga| manga.manga_id == *manga_id)
-                                .map_or(manga_id.to_string(), |manga| manga.manga_name.to_owned())
-                        }),
-                },
-            ],
-            AppRoute::MangaChapterPage {
-                manga_id,
-                chapter_number,
-                page_number: _,
-            }
-            | AppRoute::MangaChapter {
-                manga_id,
-                chapter_number,
-            } => vec![
-                BreadcrumbLink {
+                    BreadcrumbLink {
+                        route: AppRoute::ChapterList {
+                            manga_id: *manga_id,
+                        },
+                        link_text: self.state.mangas.as_ref().map_or(
+                            manga_id.to_string(),
+                            |mangas| {
+                                mangas.get(&manga_id).map_or(manga_id.to_string(), |manga| {
+                                    manga.manga_name.to_owned()
+                                })
+                            },
+                        ),
+                    },
+                ],
+                AppRoute::MangaChapterPage {
+                    manga_id,
+                    chapter_number,
+                    page_number: _,
+                }
+                | AppRoute::MangaChapter {
+                    manga_id,
+                    chapter_number,
+                } => vec![
+                    BreadcrumbLink {
+                        route: AppRoute::MangaList,
+                        link_text: "llrs".to_owned(),
+                    },
+                    BreadcrumbLink {
+                        route: AppRoute::ChapterList {
+                            manga_id: *manga_id,
+                        },
+                        link_text: self.state.mangas.as_ref().map_or(
+                            manga_id.to_string(),
+                            |mangas| {
+                                mangas.get(&manga_id).map_or(manga_id.to_string(), |manga| {
+                                    manga.manga_name.to_owned()
+                                })
+                            },
+                        ),
+                    },
+                    BreadcrumbLink {
+                        route: AppRoute::MangaChapter {
+                            manga_id: *manga_id,
+                            chapter_number: chapter_number.to_owned(),
+                        },
+                        link_text: format!("Chapter {}", chapter_number.to_owned()),
+                    },
+                ],
+                AppRoute::NotFound(Permissive(_)) => vec![BreadcrumbLink {
                     route: AppRoute::MangaList,
                     link_text: "llrs".to_owned(),
-                },
-                BreadcrumbLink {
-                    route: AppRoute::ChapterList {
-                        manga_id: *manga_id,
-                    },
-                    link_text: self
-                        .state
-                        .mangas
-                        .as_ref()
-                        .map_or(manga_id.to_string(), |mangas| {
-                            mangas
-                                .iter()
-                                .find(|manga| manga.manga_id == *manga_id)
-                                .map_or(manga_id.to_string(), |manga| manga.manga_name.to_owned())
-                        }),
-                },
-                BreadcrumbLink {
-                    route: AppRoute::MangaChapter {
-                        manga_id: *manga_id,
-                        chapter_number: chapter_number.to_owned(),
-                    },
-                    link_text: format!("Chapter {}", chapter_number.to_owned()),
-                },
-            ],
-            AppRoute::NotFound(Permissive(_)) => vec![BreadcrumbLink {
-                route: AppRoute::MangaList,
-                link_text: "llrs".to_owned(),
-            }],
-        };
+                }],
+            };
 
         ChildrenRenderer::new(vec![html! {
             <>
