@@ -1,7 +1,7 @@
 mod app_navbar;
 
 use crate::agents::manga::MangaAgent;
-use crate::agents::{chapter::ChapterAgent, page::PageAgent};
+use crate::agents::page::PageAgent;
 use crate::pages::{not_found, ChapterList, MangaList, MangaPage};
 use crate::route::AppRoute;
 use app_navbar::AppNavbar;
@@ -15,8 +15,6 @@ pub(super) struct App {
     #[allow(dead_code)]
     manga_agent: Dispatcher<MangaAgent>,
     #[allow(dead_code)]
-    chapter_agent: Dispatcher<ChapterAgent>,
-    #[allow(dead_code)]
     page_agent: Dispatcher<PageAgent>,
 }
 
@@ -27,7 +25,6 @@ impl Component for App {
     fn create(_: Self::Properties, _: ComponentLink<Self>) -> Self {
         Self {
             manga_agent: MangaAgent::dispatcher(),
-            chapter_agent: ChapterAgent::dispatcher(),
             page_agent: PageAgent::dispatcher(),
         }
     }

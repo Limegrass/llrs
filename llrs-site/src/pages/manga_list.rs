@@ -48,6 +48,7 @@ impl Component for MangaList {
         match msg {
             Msg::AgentResponse(response) => match response {
                 Response::MangaMap { mangas } => self.state.mangas = Some(mangas),
+                _ => {}
             },
         }
         true

@@ -57,6 +57,7 @@ impl Component for AppNavbar {
         match msg {
             Msg::AgentResponse(response) => match response {
                 MangaResponse::MangaMap { mangas } => self.state.mangas = Some(mangas),
+                _ => {}
             },
         };
         true

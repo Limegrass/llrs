@@ -1,6 +1,6 @@
 use super::progress::progress_bar;
 use crate::agents::{
-    chapter::{Action as ChapterAction, ChapterAgent},
+    manga::{Action as MangaAction, MangaAgent, Response as MangaAgentResponse},
     page::{Action as PageAction, PageAgent},
 };
 use crate::route::AppRoute;
@@ -35,7 +35,7 @@ pub(crate) struct MangaPage {
     #[allow(dead_code)]
     page_agent: Box<dyn Bridge<PageAgent>>,
     #[allow(dead_code)]
-    chapter_agent: Box<dyn Bridge<ChapterAgent>>,
+    manga_agent: Box<dyn Bridge<MangaAgent>>,
     route_dispatcher: RouteAgentDispatcher,
     prefetcher: Option<HtmlImageElement>,
     window: Option<Window>,
@@ -48,7 +48,7 @@ pub(crate) struct MangaPage {
 pub(crate) enum Msg {
     FetchPagesComplete(Rc<Vec<Page>>),
     PreloadNextImage { page_number: usize },
-    FetchChapterComplete(Rc<Vec<Chapter>>),
+    MangaAgentResponse(MangaAgentResponse),
     PageBack,
     PageForward,
 }
@@ -72,8 +72,8 @@ impl Component for MangaPage {
             chapter_number: props.chapter_number.to_owned(),
         });
 
-        let mut chapter_agent = ChapterAgent::bridge(link.callback(Msg::FetchChapterComplete));
-        chapter_agent.send(ChapterAction::GetChapterList {
+        let mut manga_agent = MangaAgent::bridge(link.callback(Msg::MangaAgentResponse));
+        manga_agent.send(MangaAction::GetChapterList {
             manga_id: props.manga_id,
         });
 
@@ -92,7 +92,7 @@ impl Component for MangaPage {
             prefetcher: HtmlImageElement::new().ok(),
             page_agent,
             route_dispatcher,
-            chapter_agent,
+            manga_agent,
             state,
             props,
             link,
@@ -196,8 +196,16 @@ impl Component for MangaPage {
 
                 false
             }
-            Msg::FetchChapterComplete(chapters) => {
-                self.state.chapters = Some(chapters);
+            Msg::MangaAgentResponse(response) => {
+                match response {
+                    MangaAgentResponse::Chapters {
+                        manga_id: _,
+                        chapters,
+                    } => {
+                        self.state.chapters = Some(chapters);
+                    }
+                    _ => {}
+                };
                 false
             }
             Msg::PageBack => {

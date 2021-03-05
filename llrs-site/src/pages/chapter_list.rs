@@ -1,8 +1,5 @@
 use super::progress::progress_bar;
-use crate::agents::{
-    chapter::{Action as ChapterAction, ChapterAgent},
-    manga::{Action as MangaAction, MangaAgent, Response as MangaResponse},
-};
+use crate::agents::manga::{Action as MangaAction, MangaAgent, Response as MangaResponse};
 use crate::route::AppRoute;
 use llrs_model::Chapter;
 use log::*;
@@ -14,8 +11,6 @@ pub(super) struct State {
     cover_image_url: String,
     chapters: Option<Rc<Vec<Chapter>>>,
     #[allow(dead_code)]
-    chapter_agent: Box<dyn Bridge<ChapterAgent>>,
-    #[allow(dead_code)]
     manga_agent: Box<dyn Bridge<MangaAgent>>,
 }
 
@@ -26,7 +21,6 @@ pub(crate) struct ChapterList {
 
 #[derive(Debug)]
 pub(crate) enum Msg {
-    FetchChaptersComplete(Rc<Vec<Chapter>>),
     FetchMangaComplete(MangaResponse),
 }
 
@@ -40,18 +34,15 @@ impl Component for ChapterList {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let mut chapter_agent = ChapterAgent::bridge(link.callback(Msg::FetchChaptersComplete));
-        chapter_agent.send(ChapterAction::GetChapterList {
-            manga_id: props.manga_id,
-        });
-
         let mut manga_agent = MangaAgent::bridge(link.callback(Msg::FetchMangaComplete));
         manga_agent.send(MangaAction::GetMangaList);
+        manga_agent.send(MangaAction::GetChapterList {
+            manga_id: props.manga_id,
+        });
 
         let state = State {
             cover_image_url: "".to_owned(),
             chapters: None,
-            chapter_agent,
             manga_agent,
         };
 
@@ -65,11 +56,15 @@ impl Component for ChapterList {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         trace!("{:?}", msg);
         match msg {
-            Msg::FetchChaptersComplete(data) => self.state.chapters = Some(data),
             Msg::FetchMangaComplete(response) => match response {
                 MangaResponse::MangaMap { mangas } => {
                     if let Some(manga) = mangas.get(&self.props.manga_id) {
                         self.state.cover_image_url = manga.cover_image_url.to_owned();
+                    }
+                }
+                MangaResponse::Chapters { manga_id, chapters } => {
+                    if manga_id == self.props.manga_id {
+                        self.state.chapters = Some(chapters);
                     }
                 }
             },
