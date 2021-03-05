@@ -183,17 +183,16 @@ impl Agent for MangaAgent {
                         mangas: Rc::clone(mangas),
                     };
                     self.link.respond(requester, response);
-                } else if self.fetch_tasks.get(&input).is_none() {
-                    match self.fetch_manga_list() {
-                        Ok(fetch_task) => {
-                            self.fetch_tasks.insert(input.clone(), fetch_task);
+                } else {
+                    if self.fetch_tasks.get(&input).is_none() {
+                        match self.fetch_manga_list() {
+                            Ok(fetch_task) => {
+                                self.fetch_tasks.insert(input.clone(), fetch_task);
+                            }
+                            Err(error) => self.link.send_message(Msg::Error(error)),
                         }
-                        Err(error) => self.link.send_message(Msg::Error(error)),
                     }
-                } // else wait for EmitListUpdate to trigger from existing fetch_task
-                  // FIXME
-                if let Some(subscribers) = self.subscribers_map.get_mut(&input) {
-                    subscribers.insert(requester);
+                    self.add_subscriber(input, requester);
                 }
             }
             Action::GetChapterList { manga_id } => {
@@ -205,26 +204,22 @@ impl Agent for MangaAgent {
                             chapters: Rc::clone(chapters),
                         },
                     );
-                } else if self.fetch_tasks.get(&input).is_none() {
-                    match self.fetch_chapter_list(manga_id) {
-                        Ok(fetch_task) => {
-                            self.fetch_tasks.insert(input.clone(), fetch_task);
+                } else {
+                    if self.fetch_tasks.get(&input).is_none() {
+                        match self.fetch_chapter_list(manga_id) {
+                            Ok(fetch_task) => {
+                                self.fetch_tasks.insert(input.clone(), fetch_task);
+                            }
+                            Err(error) => self.link.send_message(Msg::Error(error)),
                         }
-                        Err(error) => self.link.send_message(Msg::Error(error)),
                     }
+                    self.add_subscriber(input, requester);
                 };
-
-                // FIXME
-                let subscribers = self.subscribers_map.entry(input).or_insert(HashSet::new());
-
-                subscribers.insert(requester);
             }
             Action::GetPageList {
                 manga_id,
                 ref chapter_number,
             } => {
-                // TODO: Maybe consolidate and just unregister subscribers
-                // on disconnect while sending new message EmitFetchComplete otherwise
                 let key = (manga_id, chapter_number.to_owned());
                 if let Some(pages) = &self.chapter_pages.get(&key) {
                     self.link.respond(
@@ -243,8 +238,7 @@ impl Agent for MangaAgent {
                         Err(error) => self.link.send_message(Msg::Error(error)),
                     }
                 }
-                let subscribers = self.subscribers_map.entry(input).or_insert(HashSet::new());
-                subscribers.insert(requester);
+                self.add_subscriber(input, requester);
             }
         }
     }
@@ -319,5 +313,10 @@ impl MangaAgent {
                 subscribers.clear();
             }
         }
+    }
+
+    fn add_subscriber(&mut self, action: Action, requester: HandlerId) {
+        let subscribers = self.subscribers_map.entry(action).or_insert(HashSet::new());
+        subscribers.insert(requester);
     }
 }
