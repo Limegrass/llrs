@@ -188,7 +188,7 @@ impl Agent for MangaAgent {
                         Ok(fetch_task) => {
                             self.fetch_tasks.insert(input.clone(), fetch_task);
                         }
-                        Err(error) => error!("{}", error),
+                        Err(error) => self.link.send_message(Msg::Error(error)),
                     }
                 } // else wait for EmitListUpdate to trigger from existing fetch_task
                   // FIXME
@@ -210,7 +210,7 @@ impl Agent for MangaAgent {
                         Ok(fetch_task) => {
                             self.fetch_tasks.insert(input.clone(), fetch_task);
                         }
-                        Err(error) => error!("{}", error),
+                        Err(error) => self.link.send_message(Msg::Error(error)),
                     }
                 };
 
@@ -240,7 +240,7 @@ impl Agent for MangaAgent {
                         Ok(fetch_task) => {
                             self.fetch_tasks.insert(input.clone(), fetch_task);
                         }
-                        Err(error) => error!("{}", error),
+                        Err(error) => self.link.send_message(Msg::Error(error)),
                     }
                 }
                 let subscribers = self.subscribers_map.entry(input).or_insert(HashSet::new());
