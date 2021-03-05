@@ -1,6 +1,7 @@
 use llrs_model::{Chapter, Manga, Page};
 use log::*;
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
     rc::Rc,
     time::Duration,
@@ -78,11 +79,6 @@ pub(crate) enum Response {
     },
 }
 
-// Keep what I have, change to a pure pull based data fetching,
-// and only implement pub/sub style if needed later (not needed right now).
-// Copy karaoke rs pull scheme
-// Actually, using use_reducer and use_context seems like a way better option
-// along with functional components.
 impl Agent for MangaAgent {
     type Reach = Context<Self>;
     type Message = Msg;
@@ -176,70 +172,25 @@ impl Agent for MangaAgent {
     }
 
     fn handle_input(&mut self, input: Self::Input, requester: HandlerId) {
-        match input {
-            Action::GetMangaList => {
-                if let Some(mangas) = &self.manga_map {
-                    let response = Response::MangaMap {
-                        mangas: Rc::clone(mangas),
-                    };
-                    self.link.respond(requester, response);
-                } else {
-                    if self.fetch_tasks.get(&input).is_none() {
-                        match self.fetch_manga_list() {
-                            Ok(fetch_task) => {
-                                self.fetch_tasks.insert(input.clone(), fetch_task);
-                            }
-                            Err(error) => self.link.send_message(Msg::Error(error)),
-                        }
+        let cell = Rc::new(RefCell::new(self));
+
+        if let Some(response) = get_cached_response(&cell, &input) {
+            cell.borrow_mut().link.respond(requester, response);
+        } else {
+            if cell.borrow().fetch_tasks.get(&input).is_none() {
+                let cell_ref = Rc::clone(&cell);
+                let mut get_fetch_task = get_fetch_task_closure(cell_ref, &input);
+                match get_fetch_task() {
+                    Ok(fetch_task) => {
+                        cell.borrow_mut()
+                            .fetch_tasks
+                            .insert(input.clone(), fetch_task);
                     }
-                    self.add_subscriber(input, requester);
-                }
-            }
-            Action::GetChapterList { manga_id } => {
-                if let Some(chapters) = self.chapters.get(&manga_id) {
-                    self.link.respond(
-                        requester,
-                        Response::Chapters {
-                            manga_id,
-                            chapters: Rc::clone(chapters),
-                        },
-                    );
-                } else {
-                    if self.fetch_tasks.get(&input).is_none() {
-                        match self.fetch_chapter_list(manga_id) {
-                            Ok(fetch_task) => {
-                                self.fetch_tasks.insert(input.clone(), fetch_task);
-                            }
-                            Err(error) => self.link.send_message(Msg::Error(error)),
-                        }
-                    }
-                    self.add_subscriber(input, requester);
+                    Err(error) => cell.borrow_mut().link.send_message(Msg::Error(error)),
                 };
             }
-            Action::GetPageList {
-                manga_id,
-                ref chapter_number,
-            } => {
-                let key = (manga_id, chapter_number.to_owned());
-                if let Some(pages) = &self.chapter_pages.get(&key) {
-                    self.link.respond(
-                        requester,
-                        Response::Pages {
-                            manga_id,
-                            chapter_number: chapter_number.to_owned(),
-                            pages: Rc::clone(&pages),
-                        },
-                    );
-                } else if self.fetch_tasks.get(&input).is_none() {
-                    match self.fetch_page_list(manga_id, chapter_number.to_owned()) {
-                        Ok(fetch_task) => {
-                            self.fetch_tasks.insert(input.clone(), fetch_task);
-                        }
-                        Err(error) => self.link.send_message(Msg::Error(error)),
-                    }
-                }
-                self.add_subscriber(input, requester);
-            }
+
+            cell.borrow_mut().add_subscriber(input.clone(), requester);
         }
     }
 }
@@ -318,5 +269,53 @@ impl MangaAgent {
     fn add_subscriber(&mut self, action: Action, requester: HandlerId) {
         let subscribers = self.subscribers_map.entry(action).or_insert(HashSet::new());
         subscribers.insert(requester);
+    }
+}
+
+fn get_cached_response(agent_ref: &RefCell<&mut MangaAgent>, action: &Action) -> Option<Response> {
+    let agent = agent_ref.borrow();
+    match action {
+        Action::GetMangaList => agent.manga_map.as_ref().map(|mangas| Response::MangaMap {
+            mangas: Rc::clone(mangas),
+        }),
+        Action::GetChapterList { manga_id } => {
+            agent
+                .chapters
+                .get(&manga_id)
+                .map(|chapters| Response::Chapters {
+                    manga_id: *manga_id,
+                    chapters: Rc::clone(chapters),
+                })
+        }
+        Action::GetPageList {
+            manga_id,
+            ref chapter_number,
+        } => {
+            let key = (*manga_id, chapter_number.to_owned());
+            agent.chapter_pages.get(&key).map(|pages| Response::Pages {
+                manga_id: *manga_id,
+                chapter_number: chapter_number.to_owned(),
+                pages: Rc::clone(&pages),
+            })
+        }
+    }
+}
+
+fn get_fetch_task_closure<'a>(
+    cell: Rc<RefCell<&'a mut MangaAgent>>,
+    action: &'a Action,
+) -> Box<dyn FnMut() -> Result<FetchTask, anyhow::Error> + 'a> {
+    match &action {
+        Action::GetMangaList => Box::new(move || cell.try_borrow_mut()?.fetch_manga_list()),
+        Action::GetChapterList { manga_id } => {
+            Box::new(move || cell.try_borrow_mut()?.fetch_chapter_list(*manga_id))
+        }
+        Action::GetPageList {
+            manga_id,
+            chapter_number,
+        } => Box::new(move || {
+            cell.try_borrow_mut()?
+                .fetch_page_list(*manga_id, chapter_number.to_owned())
+        }),
     }
 }
