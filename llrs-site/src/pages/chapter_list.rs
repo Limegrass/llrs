@@ -67,6 +67,7 @@ impl Component for ChapterList {
                         self.state.chapters = Some(chapters);
                     }
                 }
+                _ => {}
             },
         }
         true

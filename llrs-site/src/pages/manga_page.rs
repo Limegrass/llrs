@@ -1,8 +1,5 @@
 use super::progress::progress_bar;
-use crate::agents::{
-    manga::{Action as MangaAction, MangaAgent, Response as MangaAgentResponse},
-    page::{Action as PageAction, PageAgent},
-};
+use crate::agents::manga::{Action as MangaAction, MangaAgent, Response as MangaAgentResponse};
 use crate::route::AppRoute;
 use llrs_model::{Chapter, Page};
 use log::*;
@@ -33,8 +30,6 @@ enum ViewFormat {
 
 pub(crate) struct MangaPage {
     #[allow(dead_code)]
-    page_agent: Box<dyn Bridge<PageAgent>>,
-    #[allow(dead_code)]
     manga_agent: Box<dyn Bridge<MangaAgent>>,
     route_dispatcher: RouteAgentDispatcher,
     prefetcher: Option<HtmlImageElement>,
@@ -46,7 +41,6 @@ pub(crate) struct MangaPage {
 
 #[derive(Debug)]
 pub(crate) enum Msg {
-    FetchPagesComplete(Rc<Vec<Page>>),
     PreloadNextImage { page_number: usize },
     MangaAgentResponse(MangaAgentResponse),
     PageBack,
@@ -66,15 +60,14 @@ impl Component for MangaPage {
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         trace!("manga_page: {:?}", props);
-        let mut page_agent = PageAgent::bridge(link.callback(Msg::FetchPagesComplete));
-        page_agent.send(PageAction::GetPageList {
-            manga_id: props.manga_id,
-            chapter_number: props.chapter_number.to_owned(),
-        });
 
         let mut manga_agent = MangaAgent::bridge(link.callback(Msg::MangaAgentResponse));
         manga_agent.send(MangaAction::GetChapterList {
             manga_id: props.manga_id,
+        });
+        manga_agent.send(MangaAction::GetPageList {
+            manga_id: props.manga_id,
+            chapter_number: props.chapter_number.to_owned(),
         });
 
         let state = State {
@@ -90,7 +83,6 @@ impl Component for MangaPage {
 
         Self {
             prefetcher: HtmlImageElement::new().ok(),
-            page_agent,
             route_dispatcher,
             manga_agent,
             state,
@@ -102,7 +94,7 @@ impl Component for MangaPage {
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
         if props.chapter_number != self.props.chapter_number {
-            self.page_agent.send(PageAction::GetPageList {
+            self.manga_agent.send(MangaAction::GetPageList {
                 manga_id: props.manga_id,
                 chapter_number: props.chapter_number.to_owned(),
             });
@@ -117,43 +109,6 @@ impl Component for MangaPage {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         trace!("{:?}", msg);
         match msg {
-            Msg::FetchPagesComplete(data) => {
-                info!("page {:p}", &data);
-                if self.state.should_set_to_last_page || data.len() < self.props.page_number {
-                    let route = AppRoute::MangaChapterPage {
-                        manga_id: self.props.manga_id,
-                        chapter_number: self.props.chapter_number.to_owned(),
-                        page_number: data.len(),
-                    };
-                    self.route_dispatcher
-                        .send(RouteRequest::ChangeRoute(Route::from(route)));
-                    self.state.starting_page_number = Some(self.props.page_number);
-                    self.state.pages = Some(data);
-                    false
-                } else if data.len() == 0 {
-                    let route = AppRoute::NotFound(Permissive(Some(format!(
-                        "Manga with ID {} and Chapter {} not found",
-                        self.props.manga_id, self.props.chapter_number
-                    ))));
-                    self.route_dispatcher
-                        .send(RouteRequest::ChangeRoute(Route::from(route)));
-                    self.state.starting_page_number = Some(self.props.page_number);
-                    false
-                } else if self.props.page_number == 0 {
-                    let route = AppRoute::MangaChapter {
-                        manga_id: self.props.manga_id,
-                        chapter_number: self.props.chapter_number.to_owned(),
-                    };
-                    self.route_dispatcher
-                        .send(RouteRequest::ChangeRoute(Route::from(route)));
-                    self.state.starting_page_number = Some(self.props.page_number);
-                    self.state.pages = Some(data);
-                    false
-                } else {
-                    self.state.pages = Some(data);
-                    true
-                }
-            }
             Msg::PreloadNextImage { page_number } => {
                 if let Some(pages) = self.state.pages.as_ref() {
                     if pages.len() > 0 {
@@ -196,18 +151,56 @@ impl Component for MangaPage {
 
                 false
             }
-            Msg::MangaAgentResponse(response) => {
-                match response {
-                    MangaAgentResponse::Chapters {
-                        manga_id: _,
-                        chapters,
-                    } => {
-                        self.state.chapters = Some(chapters);
+            Msg::MangaAgentResponse(response) => match response {
+                MangaAgentResponse::Chapters {
+                    manga_id: _,
+                    chapters,
+                } => {
+                    self.state.chapters = Some(chapters);
+                    false
+                }
+                MangaAgentResponse::Pages {
+                    manga_id: _,
+                    chapter_number: _,
+                    pages,
+                } => {
+                    if self.state.should_set_to_last_page || pages.len() < self.props.page_number {
+                        let route = AppRoute::MangaChapterPage {
+                            manga_id: self.props.manga_id,
+                            chapter_number: self.props.chapter_number.to_owned(),
+                            page_number: pages.len(),
+                        };
+                        self.route_dispatcher
+                            .send(RouteRequest::ChangeRoute(Route::from(route)));
+                        self.state.starting_page_number = Some(self.props.page_number);
+                        self.state.pages = Some(pages);
+                        false
+                    } else if pages.len() == 0 {
+                        let route = AppRoute::NotFound(Permissive(Some(format!(
+                            "Manga with ID {} and Chapter {} not found",
+                            self.props.manga_id, self.props.chapter_number
+                        ))));
+                        self.route_dispatcher
+                            .send(RouteRequest::ChangeRoute(Route::from(route)));
+                        self.state.starting_page_number = Some(self.props.page_number);
+                        false
+                    } else if self.props.page_number == 0 {
+                        let route = AppRoute::MangaChapter {
+                            manga_id: self.props.manga_id,
+                            chapter_number: self.props.chapter_number.to_owned(),
+                        };
+                        self.route_dispatcher
+                            .send(RouteRequest::ChangeRoute(Route::from(route)));
+                        self.state.starting_page_number = Some(self.props.page_number);
+                        self.state.pages = Some(pages);
+                        false
+                    } else {
+                        self.state.pages = Some(pages);
+                        true
                     }
-                    _ => {}
-                };
-                false
-            }
+                }
+                _ => false,
+            },
             Msg::PageBack => {
                 self.state.should_set_to_last_page = true;
                 self.scroll_to_manga_page_top();
@@ -245,7 +238,7 @@ impl Component for MangaPage {
                 };
 
                 if current_chapter_number != previous_page_chapter_number {
-                    self.page_agent.send(PageAction::GetPageList {
+                    self.manga_agent.send(MangaAction::GetPageList {
                         manga_id: self.props.manga_id,
                         chapter_number: previous_page_chapter_number.to_owned(),
                     });

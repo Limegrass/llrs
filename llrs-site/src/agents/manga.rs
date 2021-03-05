@@ -1,4 +1,4 @@
-use llrs_model::{Chapter, Manga};
+use llrs_model::{Chapter, Manga, Page};
 use log::*;
 use std::{
     collections::{HashMap, HashSet},
@@ -19,12 +19,17 @@ pub(crate) enum Msg {
     FetchMangaComplete {
         mangas: Vec<Manga>,
     },
-    Error(anyhow::Error),
-    CleanUpFetchTasks,
     FetchChapterComplete {
         chapters: Vec<Chapter>,
         manga_id: i32,
     },
+    FetchPageComplete {
+        pages: Vec<Page>,
+        manga_id: i32,
+        chapter_number: String,
+    },
+    Error(anyhow::Error),
+    CleanUpFetchTasks,
     EmitFetchComplete {
         action: Action,
     },
@@ -32,14 +37,22 @@ pub(crate) enum Msg {
 
 #[derive(Debug, PartialEq, Hash, Clone)]
 pub(crate) enum Action {
-    GetChapterList { manga_id: i32 },
+    GetChapterList {
+        manga_id: i32,
+    },
     GetMangaList,
+    GetPageList {
+        manga_id: i32,
+        chapter_number: String,
+    },
 }
 impl Eq for Action {}
 
+type DataKey = (i32, String);
 // Use a Rc<RefCell<Option<HashMap<i32, Rc<Manga>>>>>?
 // EmitListUpdate just tells subscribers they can refresh if they want
 pub(crate) struct MangaAgent {
+    chapter_pages: HashMap<DataKey, Rc<Vec<Page>>>,
     chapters: HashMap<i32, Rc<Vec<Chapter>>>,
     link: AgentLink<MangaAgent>,
     fetch_tasks: HashMap<Action, FetchTask>,
@@ -49,7 +62,7 @@ pub(crate) struct MangaAgent {
     subscribers_map: HashMap<Action, HashSet<HandlerId>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum Response {
     MangaMap {
         mangas: Rc<HashMap<i32, Manga>>,
@@ -57,6 +70,11 @@ pub(crate) enum Response {
     Chapters {
         manga_id: i32,
         chapters: Rc<Vec<Chapter>>,
+    },
+    Pages {
+        manga_id: i32,
+        chapter_number: String,
+        pages: Rc<Vec<Page>>,
     },
 }
 
@@ -81,6 +99,7 @@ impl Agent for MangaAgent {
                 .collect();
         Self {
             link,
+            chapter_pages: HashMap::new(),
             chapters: HashMap::new(),
             fetch_tasks: HashMap::new(),
             manga_map: None,
@@ -104,39 +123,53 @@ impl Agent for MangaAgent {
                 });
             }
             Msg::CleanUpFetchTasks => self.fetch_tasks.retain(|_, task| task.is_active()),
-            Msg::EmitFetchComplete { action } => match action {
-                Action::GetMangaList => {
-                    if let Some(mangas) = &self.manga_map {
-                        if let Some(subscribers) = self.subscribers_map.get_mut(&action) {
-                            for sub in subscribers.iter() {
-                                let response = Response::MangaMap {
-                                    mangas: Rc::clone(mangas),
-                                };
-                                self.link.respond(*sub, response);
-                            }
-                            subscribers.clear();
-                        }
+            Msg::EmitFetchComplete { action } => {
+                let response = match action {
+                    Action::GetMangaList => {
+                        self.manga_map.as_ref().map(|mangas| Response::MangaMap {
+                            mangas: Rc::clone(&mangas),
+                        })
                     }
-                }
-                Action::GetChapterList { manga_id } => {
-                    if let Some(chapters) = self.chapters.get(&manga_id) {
-                        if let Some(subscribers) = self.subscribers_map.get_mut(&action) {
-                            for sub in subscribers.iter() {
-                                let response = Response::Chapters {
-                                    manga_id,
-                                    chapters: Rc::clone(chapters),
-                                };
-                                self.link.respond(*sub, response);
-                            }
-                            subscribers.clear();
-                        }
+                    Action::GetChapterList { manga_id } => {
+                        self.chapters
+                            .get(&manga_id)
+                            .map(|chapters| Response::Chapters {
+                                manga_id,
+                                chapters: Rc::clone(chapters),
+                            })
                     }
-                }
-            },
+                    Action::GetPageList {
+                        manga_id,
+                        ref chapter_number,
+                    } => self
+                        .chapter_pages
+                        .get(&(manga_id, chapter_number.to_owned()))
+                        .map(|pages| Response::Pages {
+                            manga_id,
+                            chapter_number: chapter_number.to_owned(),
+                            pages: Rc::clone(pages),
+                        }),
+                };
+                self.respond_and_remove_subs(&action, response);
+            }
             Msg::FetchChapterComplete { chapters, manga_id } => {
                 self.chapters.insert(manga_id, Rc::new(chapters));
                 self.link.send_message(Msg::EmitFetchComplete {
                     action: Action::GetChapterList { manga_id },
+                });
+            }
+            Msg::FetchPageComplete {
+                pages,
+                manga_id,
+                chapter_number,
+            } => {
+                let key = (manga_id, chapter_number.to_owned());
+                self.chapter_pages.insert(key, Rc::new(pages));
+                self.link.send_message(Msg::EmitFetchComplete {
+                    action: Action::GetPageList {
+                        manga_id,
+                        chapter_number,
+                    },
                 });
             }
         }
@@ -158,6 +191,7 @@ impl Agent for MangaAgent {
                         Err(error) => error!("{}", error),
                     }
                 } // else wait for EmitListUpdate to trigger from existing fetch_task
+                  // FIXME
                 if let Some(subscribers) = self.subscribers_map.get_mut(&input) {
                     subscribers.insert(requester);
                 }
@@ -180,8 +214,36 @@ impl Agent for MangaAgent {
                     }
                 };
 
+                // FIXME
                 let subscribers = self.subscribers_map.entry(input).or_insert(HashSet::new());
 
+                subscribers.insert(requester);
+            }
+            Action::GetPageList {
+                manga_id,
+                ref chapter_number,
+            } => {
+                // TODO: Maybe consolidate and just unregister subscribers
+                // on disconnect while sending new message EmitFetchComplete otherwise
+                let key = (manga_id, chapter_number.to_owned());
+                if let Some(pages) = &self.chapter_pages.get(&key) {
+                    self.link.respond(
+                        requester,
+                        Response::Pages {
+                            manga_id,
+                            chapter_number: chapter_number.to_owned(),
+                            pages: Rc::clone(&pages),
+                        },
+                    );
+                } else if self.fetch_tasks.get(&input).is_none() {
+                    match self.fetch_page_list(manga_id, chapter_number.to_owned()) {
+                        Ok(fetch_task) => {
+                            self.fetch_tasks.insert(input.clone(), fetch_task);
+                        }
+                        Err(error) => error!("{}", error),
+                    }
+                }
+                let subscribers = self.subscribers_map.entry(input).or_insert(HashSet::new());
                 subscribers.insert(requester);
             }
         }
@@ -190,18 +252,15 @@ impl Agent for MangaAgent {
 
 impl MangaAgent {
     fn fetch_manga_list(&mut self) -> Result<FetchTask, anyhow::Error> {
-        let request = FetchRequest::get(env!("LLRS_MANGA_LIST_ENDPOINT")).body(Nothing)?;
+        let request = FetchRequest::get(env!("LLRS_API_ENDPOINT")).body(Nothing)?;
         let callback = self.link.callback(parse_manga_list_response);
         Ok(FetchService::fetch(request, callback)?)
     }
 
     fn fetch_chapter_list(&mut self, manga_id: i32) -> Result<FetchTask, anyhow::Error> {
-        let request = FetchRequest::get(format!(
-            "{}/{}",
-            env!("LLRS_CHAPTER_LIST_ENDPOINT"),
-            manga_id
-        ))
-        .body(Nothing)?;
+        let request =
+            FetchRequest::get(format!("{}/manga/{}", env!("LLRS_API_ENDPOINT"), manga_id))
+                .body(Nothing)?;
         let callback = self.link.callback(
             move |response: FetchResponse<Json<Result<Vec<Chapter>, anyhow::Error>>>| {
                 let Json(data) = response.into_body();
@@ -212,6 +271,45 @@ impl MangaAgent {
             },
         );
         Ok(FetchService::fetch(request, callback)?)
+    }
+
+    fn fetch_page_list(
+        &mut self,
+        manga_id: i32,
+        chapter_number: String,
+    ) -> Result<FetchTask, anyhow::Error> {
+        let request = FetchRequest::get(format!(
+            "{}/manga/{}/{}",
+            env!("LLRS_API_ENDPOINT"),
+            manga_id,
+            chapter_number
+        ))
+        .body(Nothing)?;
+        let callback = self.link.callback(
+            move |response: FetchResponse<Json<Result<Vec<Page>, anyhow::Error>>>| {
+                let Json(data) = response.into_body();
+                match data {
+                    Ok(pages) => Msg::FetchPageComplete {
+                        pages,
+                        manga_id,
+                        chapter_number: chapter_number.to_owned(),
+                    },
+                    Err(error) => Msg::Error(error),
+                }
+            },
+        );
+        FetchService::fetch(request, callback)
+    }
+
+    fn respond_and_remove_subs(&mut self, action: &Action, response: Option<Response>) {
+        if let Some(response) = response {
+            if let Some(subscribers) = self.subscribers_map.get_mut(action) {
+                for sub in subscribers.iter() {
+                    self.link.respond(*sub, response.clone());
+                }
+                subscribers.clear();
+            }
+        }
     }
 }
 
