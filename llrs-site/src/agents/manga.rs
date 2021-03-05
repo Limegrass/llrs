@@ -253,7 +253,16 @@ impl Agent for MangaAgent {
 impl MangaAgent {
     fn fetch_manga_list(&mut self) -> Result<FetchTask, anyhow::Error> {
         let request = FetchRequest::get(env!("LLRS_API_ENDPOINT")).body(Nothing)?;
-        let callback = self.link.callback(parse_manga_list_response);
+        let callback = self.link.callback(
+            |response: FetchResponse<Json<Result<Vec<Manga>, anyhow::Error>>>| {
+                let Json(data) = response.into_body();
+                match data {
+                    Ok(mangas) => Msg::FetchMangaComplete { mangas },
+                    Err(error) => Msg::Error(error),
+                }
+            },
+        );
+
         Ok(FetchService::fetch(request, callback)?)
     }
 
@@ -310,15 +319,5 @@ impl MangaAgent {
                 subscribers.clear();
             }
         }
-    }
-}
-
-fn parse_manga_list_response(
-    response: FetchResponse<Json<Result<Vec<Manga>, anyhow::Error>>>,
-) -> Msg {
-    let Json(data) = response.into_body();
-    match data {
-        Ok(mangas) => Msg::FetchMangaComplete { mangas },
-        Err(error) => Msg::Error(error),
     }
 }
