@@ -108,6 +108,11 @@ impl AppNavbar {
     }
 
     fn get_menu_links(&self) -> Html {
+        let waifusims_link = html! {
+            <a class="navbar-item" href="https://waifusims.com/Manga">
+                {"Waifusims Reader"}
+            </a>
+        };
         let discord_link = html! {
             <a class="navbar-item" href=env!("LLRS_DISCORD_URL")>
                 {"Join the Discord"}
@@ -129,6 +134,7 @@ impl AppNavbar {
             <>
                 {manga_link}
                 {discord_link}
+                {waifusims_link}
             </>
         }
     }
