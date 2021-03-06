@@ -19,7 +19,7 @@ pub(crate) struct State {
     chapters: Option<Rc<Vec<Chapter>>>,
     view_format: ViewFormat,
     should_set_to_last_page: bool,
-    starting_page_number: Option<usize>,
+    is_loaded_page: Option<Vec<bool>>,
 }
 
 #[allow(dead_code)]
@@ -41,7 +41,7 @@ pub(crate) struct MangaPage {
 
 #[derive(Debug)]
 pub(crate) enum Msg {
-    PreloadNextImage { page_number: usize },
+    PreloadNextImage { page_index: usize },
     MangaAgentResponse(MangaAgentResponse),
     PageBack,
     PageForward,
@@ -75,7 +75,7 @@ impl Component for MangaPage {
             pages: None,
             view_format: ViewFormat::Single,
             should_set_to_last_page: false,
-            starting_page_number: None,
+            is_loaded_page: None,
         };
 
         let route_dispatcher = RouteAgentDispatcher::new();
@@ -99,6 +99,8 @@ impl Component for MangaPage {
                 chapter_number: props.chapter_number.to_owned(),
             });
             self.props = props;
+            // We don't need to rerender yet because
+            // we can just wait until we get a response for the new list of pages
             false
         } else {
             self.props = props;
@@ -109,48 +111,62 @@ impl Component for MangaPage {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         trace!("{:?}", msg);
         match msg {
-            Msg::PreloadNextImage { page_number } => {
-                if let Some(pages) = self.state.pages.as_ref() {
-                    if pages.len() > 0 {
-                        if let Some(page_index) = page_number
-                            .checked_sub(1)
-                            .map(|res| {
-                                if res < pages.len() {
-                                    Some(res)
-                                } else if res == self.state.starting_page_number.unwrap_or(res) {
-                                    None
-                                } else {
-                                    res.checked_sub(pages.len())
-                                }
-                            })
-                            .unwrap_or(None)
-                        // will never become None here as we never pass 0 as page_number
+            Msg::PreloadNextImage { page_index } => {
+                match self.state.pages.as_ref() {
+                    Some(pages) if pages.len() > 0 => {
+                        if let (Some(page), Some(image_element)) =
+                            (pages.get(page_index), &self.prefetcher)
                         {
-                            if let Some(page) = pages.get(page_index) {
-                                if let Some(image_element) = &self.prefetcher {
-                                    let link = self.link.clone();
+                            let link = self.link.clone();
+                            let page_count =
+                                self.state.pages.as_ref().map_or(0, |pages| pages.len());
+                            let next_page_index = self.get_next_page_index(
+                                page_index.checked_add(1).unwrap_or(page_index),
+                            );
+
+                            if !self
+                                .state
+                                .is_loaded_page
+                                .as_ref()
+                                .map_or(true, |is_loaded_page| {
+                                    *is_loaded_page.get(next_page_index).unwrap_or(&true)
+                                })
+                            {
+                                if next_page_index < page_count
+                                    && !self.state.is_loaded_page.as_ref().map_or(
+                                        true,
+                                        |is_loaded_page| {
+                                            *is_loaded_page.get(next_page_index).unwrap_or(&true)
+                                        },
+                                    )
+                                {
                                     let load_next_image = Closure::once(Box::new(move || {
                                         link.send_message(Msg::PreloadNextImage {
-                                            page_number: page_index
-                                                .checked_add(1)
-                                                .unwrap_or(page_index),
+                                            page_index: next_page_index,
                                         });
                                     }));
                                     image_element
                                         .set_onload(Some(load_next_image.as_ref().unchecked_ref()));
                                     load_next_image.forget();
-
-                                    image_element.set_src(&page.url_string);
                                 }
+                                image_element.set_src(&page.url_string);
                             }
-                        } else {
-                            self.state.starting_page_number = None;
+
+                            if let Some(Some(is_loaded)) = self
+                                .state
+                                .is_loaded_page
+                                .as_mut()
+                                .map(|is_loaded_page| is_loaded_page.get_mut(next_page_index))
+                            {
+                                *is_loaded = true;
+                            }
                         }
                     }
-                }
-
+                    _ => {}
+                };
                 false
             }
+
             Msg::MangaAgentResponse(response) => match response {
                 MangaAgentResponse::Chapters {
                     manga_id: _,
@@ -172,7 +188,7 @@ impl Component for MangaPage {
                         };
                         self.route_dispatcher
                             .send(RouteRequest::ChangeRoute(Route::from(route)));
-                        self.state.starting_page_number = Some(self.props.page_number);
+                        self.state.is_loaded_page = Some(vec![false; pages.len()]);
                         self.state.pages = Some(pages);
                         false
                     } else if pages.len() == 0 {
@@ -182,7 +198,7 @@ impl Component for MangaPage {
                         ))));
                         self.route_dispatcher
                             .send(RouteRequest::ChangeRoute(Route::from(route)));
-                        self.state.starting_page_number = Some(self.props.page_number);
+                        self.state.is_loaded_page = Some(vec![false; pages.len()]);
                         false
                     } else if self.props.page_number == 0 {
                         let route = AppRoute::MangaChapter {
@@ -191,16 +207,18 @@ impl Component for MangaPage {
                         };
                         self.route_dispatcher
                             .send(RouteRequest::ChangeRoute(Route::from(route)));
-                        self.state.starting_page_number = Some(self.props.page_number);
+                        self.state.is_loaded_page = Some(vec![false; pages.len()]);
                         self.state.pages = Some(pages);
                         false
                     } else {
+                        self.state.is_loaded_page = Some(vec![false; pages.len()]);
                         self.state.pages = Some(pages);
                         true
                     }
                 }
                 _ => false,
             },
+
             Msg::PageBack => {
                 self.state.should_set_to_last_page = true;
                 self.scroll_to_manga_page_top();
@@ -262,6 +280,7 @@ impl Component for MangaPage {
                     false
                 }
             }
+
             Msg::PageForward => {
                 self.state.should_set_to_last_page = false;
                 self.scroll_to_manga_page_top();
@@ -379,14 +398,27 @@ impl MangaPage {
                 </figure>
             }
         } else {
+            // THIS SHOULD really be a PANIC BUT WASM SIZES :)
             html! {"Somehow had a page_number of 0"}
         }
     }
 
     fn manga_page(&self, page: &Page) -> Html {
-        let next_page_number = (page.page_number as usize)
-            .checked_add(1)
-            .unwrap_or(page.page_number as usize);
+        info!("{:?}", self.state.is_loaded_page);
+        if !self
+            .state
+            .is_loaded_page
+            .as_ref()
+            .map_or(true, |is_loaded_page| {
+                *is_loaded_page
+                    .get(page.page_number as usize)
+                    .unwrap_or(&true)
+            })
+        {
+            self.link.send_message(Msg::PreloadNextImage {
+                page_index: page.page_number as usize, // do current page, which will be cached
+            });
+        }
 
         html! {
             <div class="container">
@@ -396,12 +428,22 @@ impl MangaPage {
                     onclick=self.link.callback(|_| Msg::PageForward) />
                 <img id="manga-image"
                      src=&page.url_string
-                     onload=self.link.callback(move |_| Msg::PreloadNextImage {
-                         page_number: next_page_number
-                     })
                      alt=format!("Page {} Image", &page.page_number)
                  />
             </div>
+        }
+    }
+
+    fn get_next_page_index(&self, page_number: usize) -> usize {
+        let page_count = self.state.pages.as_ref().map_or(0, |pages| pages.len());
+
+        // Since page_number is 1 indexed, we don't need math
+        let next_page_index = page_number as usize;
+
+        if next_page_index < page_count {
+            next_page_index
+        } else {
+            0
         }
     }
 }
