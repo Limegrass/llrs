@@ -180,39 +180,35 @@ impl Component for MangaPage {
                     chapter_number: _,
                     pages,
                 } => {
-                    if self.state.should_set_to_last_page || pages.len() < self.props.page_number {
-                        let route = AppRoute::MangaChapterPage {
+                    let route = if self.state.should_set_to_last_page
+                        || pages.len() < self.props.page_number
+                    {
+                        Some(AppRoute::MangaChapterPage {
                             manga_id: self.props.manga_id,
                             chapter_number: self.props.chapter_number.to_owned(),
                             page_number: pages.len(),
-                        };
-                        self.route_dispatcher
-                            .send(RouteRequest::ChangeRoute(Route::from(route)));
-                        self.state.is_loaded_page = Some(vec![false; pages.len()]);
-                        self.state.pages = Some(pages);
-                        false
+                        })
                     } else if pages.len() == 0 {
-                        let route = AppRoute::NotFound(Permissive(Some(format!(
+                        Some(AppRoute::NotFound(Permissive(Some(format!(
                             "Manga with ID {} and Chapter {} not found",
                             self.props.manga_id, self.props.chapter_number
-                        ))));
-                        self.route_dispatcher
-                            .send(RouteRequest::ChangeRoute(Route::from(route)));
-                        self.state.is_loaded_page = Some(vec![false; pages.len()]);
-                        false
+                        )))))
                     } else if self.props.page_number == 0 {
-                        let route = AppRoute::MangaChapter {
+                        Some(AppRoute::MangaChapter {
                             manga_id: self.props.manga_id,
                             chapter_number: self.props.chapter_number.to_owned(),
-                        };
+                        })
+                    } else {
+                        None
+                    };
+
+                    self.state.is_loaded_page = Some(vec![false; pages.len()]);
+                    self.state.pages = Some(pages);
+                    if let Some(route) = route {
                         self.route_dispatcher
                             .send(RouteRequest::ChangeRoute(Route::from(route)));
-                        self.state.is_loaded_page = Some(vec![false; pages.len()]);
-                        self.state.pages = Some(pages);
                         false
                     } else {
-                        self.state.is_loaded_page = Some(vec![false; pages.len()]);
-                        self.state.pages = Some(pages);
                         true
                     }
                 }
