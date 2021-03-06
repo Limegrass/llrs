@@ -1,20 +1,15 @@
 use super::progress::progress_bar;
-use crate::agents::{
-    chapter::{Action as ChapterAction, ChapterAgent},
-    manga::{Action as MangaAction, MangaAgent, Response as MangaResponse},
-};
+use crate::agents::manga::{Action as MangaAction, MangaAgent, Response as MangaResponse};
 use crate::route::AppRoute;
-use llrs_model::{Chapter, Manga};
+use llrs_model::Chapter;
 use log::*;
 use std::rc::Rc;
 use yew::{prelude::*, Component, ComponentLink};
 use yew_router::components::RouterAnchor;
 
 pub(super) struct State {
-    mangas: Option<Rc<Vec<Rc<Manga>>>>,
+    cover_image_url: String,
     chapters: Option<Rc<Vec<Chapter>>>,
-    #[allow(dead_code)]
-    chapter_agent: Box<dyn Bridge<ChapterAgent>>,
     #[allow(dead_code)]
     manga_agent: Box<dyn Bridge<MangaAgent>>,
 }
@@ -26,7 +21,6 @@ pub(crate) struct ChapterList {
 
 #[derive(Debug)]
 pub(crate) enum Msg {
-    FetchChaptersComplete(Rc<Vec<Chapter>>),
     FetchMangaComplete(MangaResponse),
 }
 
@@ -40,18 +34,15 @@ impl Component for ChapterList {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let mut chapter_agent = ChapterAgent::bridge(link.callback(Msg::FetchChaptersComplete));
-        chapter_agent.send(ChapterAction::GetChapterList {
+        let mut manga_agent = MangaAgent::bridge(link.callback(Msg::FetchMangaComplete));
+        manga_agent.send(MangaAction::GetMangaList);
+        manga_agent.send(MangaAction::GetChapterList {
             manga_id: props.manga_id,
         });
 
-        let mut manga_agent = MangaAgent::bridge(link.callback(Msg::FetchMangaComplete));
-        manga_agent.send(MangaAction::GetMangaList);
-
         let state = State {
-            mangas: None,
+            cover_image_url: "".to_owned(),
             chapters: None,
-            chapter_agent,
             manga_agent,
         };
 
@@ -65,35 +56,31 @@ impl Component for ChapterList {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         trace!("{:?}", msg);
         match msg {
-            Msg::FetchChaptersComplete(data) => self.state.chapters = Some(data),
             Msg::FetchMangaComplete(response) => match response {
-                MangaResponse::MangaList { mangas } => {
-                    self.state.mangas = Some(mangas);
+                MangaResponse::MangaMap { mangas } => {
+                    if let Some(manga) = mangas.get(&self.props.manga_id) {
+                        self.state.cover_image_url = manga.cover_image_url.to_owned();
+                    }
                 }
+                MangaResponse::Chapters { manga_id, chapters } => {
+                    if manga_id == self.props.manga_id {
+                        self.state.chapters = Some(chapters);
+                    }
+                }
+                _ => {}
             },
         }
         true
     }
 
     fn view(&self) -> Html {
-        let cover_image_url = self
-            .state
-            .mangas
-            .as_ref()
-            .map(|manga_list| {
-                manga_list
-                    .iter()
-                    .find(|manga| manga.manga_id == self.props.manga_id)
-                    .map(|manga| manga.cover_image_url.as_str())
-                    .unwrap_or("")
-            })
-            .unwrap_or("");
-        match &self.state.chapters {
+        let cover_image = html! {
+            <figure class="container manga-cover-image">
+                <img src=self.state.cover_image_url />
+            </figure>
+        };
+        let manga_table = match &self.state.chapters {
             Some(chapters) => html! {
-                <div class="container">
-                    <figure class="container manga-cover-image">
-                        <img src=cover_image_url />
-                    </figure>
                     <table class="table is-fullwidth is-striped is-narrow">
                         <thead>
                             <th> { "Chapter Number" } </th>
@@ -103,9 +90,15 @@ impl Component for ChapterList {
                             {for chapters.iter().map(|val| self.chapter_entry(&val))}
                         </tbody>
                     </table>
-                </div>
             },
             None => progress_bar(),
+        };
+
+        html! {
+            <div class="container">
+                {cover_image}
+                {manga_table}
+            </div>
         }
     }
 }
