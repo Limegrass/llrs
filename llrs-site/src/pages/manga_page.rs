@@ -3,7 +3,7 @@ use crate::agents::manga::{Action as MangaAction, MangaAgent, Response as MangaA
 use crate::route::AppRoute;
 use llrs_model::{Chapter, Page};
 use log::*;
-use std::{cmp::max, rc::Rc};
+use std::{cell::RefCell, cmp::max, rc::Rc};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlImageElement, ScrollBehavior, ScrollToOptions, Window};
@@ -112,240 +112,20 @@ impl Component for MangaPage {
         trace!("{:?}", msg);
         match msg {
             Msg::PreloadNextImage { page_index } => {
-                match self.state.pages.as_ref() {
-                    Some(pages) if pages.len() > 0 => {
-                        if let (Some(page), Some(image_element)) =
-                            (pages.get(page_index), &self.prefetcher)
-                        {
-                            let link = self.link.clone();
-                            let page_count =
-                                self.state.pages.as_ref().map_or(0, |pages| pages.len());
-                            let next_page_index = self.get_next_page_index(
-                                page_index.checked_add(1).unwrap_or(page_index),
-                            );
-
-                            if !self
-                                .state
-                                .is_loaded_page
-                                .as_ref()
-                                .map_or(true, |is_loaded_page| {
-                                    *is_loaded_page.get(next_page_index).unwrap_or(&true)
-                                })
-                            {
-                                if next_page_index < page_count
-                                    && !self.state.is_loaded_page.as_ref().map_or(
-                                        true,
-                                        |is_loaded_page| {
-                                            *is_loaded_page.get(next_page_index).unwrap_or(&true)
-                                        },
-                                    )
-                                {
-                                    let load_next_image = Closure::once(Box::new(move || {
-                                        link.send_message(Msg::PreloadNextImage {
-                                            page_index: next_page_index,
-                                        });
-                                    }));
-                                    image_element
-                                        .set_onload(Some(load_next_image.as_ref().unchecked_ref()));
-                                    load_next_image.forget();
-                                }
-                                image_element.set_src(&page.url_string);
-                            }
-
-                            if let Some(Some(is_loaded)) = self
-                                .state
-                                .is_loaded_page
-                                .as_mut()
-                                .map(|is_loaded_page| is_loaded_page.get_mut(next_page_index))
-                            {
-                                *is_loaded = true;
-                            }
-                        }
-                    }
-                    _ => {}
-                };
+                self.preload_image_and_set_next(page_index);
                 false
             }
-
-            Msg::MangaAgentResponse(response) => match response {
-                MangaAgentResponse::Chapters {
-                    manga_id: _,
-                    chapters,
-                } => {
-                    self.state.chapters = Some(chapters);
-                    false
-                }
-                MangaAgentResponse::Pages {
-                    manga_id: _,
-                    chapter_number: _,
-                    pages,
-                } => {
-                    let route = if self.state.should_set_to_last_page
-                        || pages.len() < self.props.page_number
-                    {
-                        Some(AppRoute::MangaChapterPage {
-                            manga_id: self.props.manga_id,
-                            chapter_number: self.props.chapter_number.to_owned(),
-                            page_number: pages.len(),
-                        })
-                    } else if pages.len() == 0 {
-                        Some(AppRoute::NotFound(Permissive(Some(format!(
-                            "Manga with ID {} and Chapter {} not found",
-                            self.props.manga_id, self.props.chapter_number
-                        )))))
-                    } else if self.props.page_number == 0 {
-                        Some(AppRoute::MangaChapter {
-                            manga_id: self.props.manga_id,
-                            chapter_number: self.props.chapter_number.to_owned(),
-                        })
-                    } else {
-                        None
-                    };
-
-                    self.state.is_loaded_page = Some(vec![false; pages.len()]);
-                    self.state.pages = Some(pages);
-                    if let Some(route) = route {
-                        self.route_dispatcher
-                            .send(RouteRequest::ChangeRoute(Route::from(route)));
-                        false
-                    } else {
-                        true
-                    }
-                }
-                _ => false,
-            },
-
+            Msg::MangaAgentResponse(response) => self.handle_manga_response(response),
             Msg::PageBack => {
                 self.state.should_set_to_last_page = true;
                 self.scroll_to_manga_page_top();
-                let current_chapter_number = &self.props.chapter_number;
-                let previous_page_chapter_number = if self.props.page_number == 1 {
-                    self.state
-                        .chapters
-                        .as_ref()
-                        .map(|chapter_list| {
-                            let current_chapter_index = chapter_list.iter().position(|chapter| {
-                                &chapter.chapter_number == current_chapter_number
-                            });
-                            let previous_chapter_index =
-                                current_chapter_index.map(|current_chapter_index| {
-                                    if current_chapter_index != 0 {
-                                        current_chapter_index
-                                            .checked_sub(1)
-                                            .unwrap_or(current_chapter_index)
-                                    } else {
-                                        current_chapter_index
-                                    }
-                                });
-                            previous_chapter_index
-                                .map(|index| {
-                                    chapter_list
-                                        .get(index)
-                                        .map(|chapter| chapter.chapter_number.as_str())
-                                        .unwrap_or(current_chapter_number.as_str())
-                                })
-                                .unwrap_or(current_chapter_number.as_str())
-                        })
-                        .unwrap_or(self.props.chapter_number.as_str())
-                } else {
-                    self.props.chapter_number.as_str()
-                };
-
-                if current_chapter_number != previous_page_chapter_number {
-                    self.manga_agent.send(MangaAction::GetPageList {
-                        manga_id: self.props.manga_id,
-                        chapter_number: previous_page_chapter_number.to_owned(),
-                    });
-                    // TODO: LOVE THIS MUTABLE GARBAGE
-                    self.props.chapter_number = previous_page_chapter_number.to_owned();
-                    false
-                } else {
-                    let route = AppRoute::MangaChapterPage {
-                        manga_id: self.props.manga_id,
-                        chapter_number: self.props.chapter_number.to_owned(),
-                        page_number: max(
-                            1,
-                            self.props
-                                .page_number
-                                .checked_sub(1)
-                                .unwrap_or(self.props.page_number),
-                        ),
-                    };
-                    self.route_dispatcher
-                        .send(RouteRequest::ChangeRoute(Route::from(route)));
-                    false
-                }
+                self.page_backwards();
+                false
             }
-
             Msg::PageForward => {
                 self.state.should_set_to_last_page = false;
                 self.scroll_to_manga_page_top();
-                let last_page = self
-                    .state
-                    .pages
-                    .as_ref()
-                    .expect("Should never try render without pages")
-                    .len();
-                let next_page_chapter_number = if self.props.page_number == last_page {
-                    self.state
-                        .chapters
-                        .as_ref()
-                        .map(|chapter_list| {
-                            let current_chapter_index = chapter_list.iter().position(|chapter| {
-                                chapter.chapter_number == self.props.chapter_number
-                            });
-                            let next_chapter_index =
-                                current_chapter_index.map(|current_chapter_index| {
-                                    if current_chapter_index
-                                        != chapter_list
-                                            .len()
-                                            .checked_sub(1)
-                                            .unwrap_or(current_chapter_index)
-                                    {
-                                        current_chapter_index
-                                            .checked_add(1)
-                                            .unwrap_or(current_chapter_index)
-                                    } else {
-                                        current_chapter_index
-                                    }
-                                });
-                            next_chapter_index
-                                .map(|index| {
-                                    chapter_list
-                                        .get(index)
-                                        .map(|chapter| chapter.chapter_number.as_str())
-                                        .unwrap_or(self.props.chapter_number.as_str())
-                                })
-                                .unwrap_or(self.props.chapter_number.as_str())
-                        })
-                        .unwrap_or(self.props.chapter_number.as_str())
-                } else {
-                    self.props.chapter_number.as_str()
-                };
-
-                let route = if next_page_chapter_number == self.props.chapter_number {
-                    let next_page_number = self.props.page_number as usize + 1;
-                    if next_page_number > last_page {
-                        AppRoute::ChapterList {
-                            manga_id: self.props.manga_id,
-                        }
-                    } else {
-                        AppRoute::MangaChapterPage {
-                            manga_id: self.props.manga_id,
-                            chapter_number: next_page_chapter_number.to_owned(),
-                            page_number: next_page_number,
-                        }
-                    }
-                } else {
-                    AppRoute::MangaChapterPage {
-                        manga_id: self.props.manga_id,
-                        chapter_number: next_page_chapter_number.to_owned(),
-                        page_number: 1,
-                    }
-                };
-
-                self.route_dispatcher
-                    .send(RouteRequest::ChangeRoute(Route::from(route)));
+                self.page_forwards();
                 false
             }
         }
@@ -442,4 +222,233 @@ impl MangaPage {
             0
         }
     }
+
+    fn preload_image_and_set_next(&mut self, page_index: usize) {
+        match self.state.pages.as_ref() {
+            Some(pages) if pages.len() > 0 => {
+                if let (Some(page), Some(image_element)) = (pages.get(page_index), &self.prefetcher)
+                {
+                    let link = self.link.clone();
+                    let page_count = self.state.pages.as_ref().map_or(0, |pages| pages.len());
+                    let next_page_index =
+                        self.get_next_page_index(page_index.checked_add(1).unwrap_or(page_index));
+
+                    if !self
+                        .state
+                        .is_loaded_page
+                        .as_ref()
+                        .map_or(true, |is_loaded_page| {
+                            *is_loaded_page.get(next_page_index).unwrap_or(&true)
+                        })
+                    {
+                        if next_page_index < page_count
+                            && !self
+                                .state
+                                .is_loaded_page
+                                .as_ref()
+                                .map_or(true, |is_loaded_page| {
+                                    *is_loaded_page.get(next_page_index).unwrap_or(&true)
+                                })
+                        {
+                            let load_next_image = Closure::once(Box::new(move || {
+                                link.send_message(Msg::PreloadNextImage {
+                                    page_index: next_page_index,
+                                });
+                            }));
+                            image_element
+                                .set_onload(Some(load_next_image.as_ref().unchecked_ref()));
+                            load_next_image.forget();
+                        }
+                        image_element.set_src(&page.url_string);
+                    }
+
+                    if let Some(Some(is_loaded)) = self
+                        .state
+                        .is_loaded_page
+                        .as_mut()
+                        .map(|is_loaded_page| is_loaded_page.get_mut(next_page_index))
+                    {
+                        *is_loaded = true;
+                    }
+                }
+            }
+            _ => {}
+        };
+    }
+
+    fn handle_manga_response(&mut self, response: MangaAgentResponse) -> ShouldRender {
+        match response {
+            MangaAgentResponse::Chapters { manga_id, chapters } => {
+                self.props.manga_id = manga_id;
+                self.state.chapters = Some(chapters);
+                false
+            }
+            MangaAgentResponse::Pages {
+                manga_id,
+                chapter_number,
+                pages,
+            } => {
+                self.props.manga_id = manga_id;
+                self.props.chapter_number = chapter_number;
+                let route =
+                    if self.state.should_set_to_last_page || pages.len() < self.props.page_number {
+                        Some(AppRoute::MangaChapterPage {
+                            manga_id: self.props.manga_id,
+                            chapter_number: self.props.chapter_number.to_owned(),
+                            page_number: pages.len(),
+                        })
+                    } else if pages.len() == 0 {
+                        Some(AppRoute::NotFound(Permissive(Some(format!(
+                            "Manga with ID {} and Chapter {} not found",
+                            self.props.manga_id, self.props.chapter_number
+                        )))))
+                    } else if self.props.page_number == 0 {
+                        Some(AppRoute::MangaChapter {
+                            manga_id: self.props.manga_id,
+                            chapter_number: self.props.chapter_number.to_owned(),
+                        })
+                    } else {
+                        None
+                    };
+
+                self.state.is_loaded_page = Some(vec![false; pages.len()]);
+                self.state.pages = Some(pages);
+                if let Some(route) = route {
+                    self.route_dispatcher
+                        .send(RouteRequest::ChangeRoute(Route::from(route)));
+                    false
+                } else {
+                    true
+                }
+            }
+            _ => false,
+        }
+    }
+
+    fn page_backwards(&mut self) {
+        let current_chapter_number = self.props.chapter_number.to_owned();
+        let previous_page_chapter_number = if self.props.page_number == 1 {
+            self.state
+                .chapters
+                .as_ref()
+                .map_or(current_chapter_number.to_owned(), |chapter_list| {
+                    get_previous_chapter_number(chapter_list, current_chapter_number.to_owned())
+                })
+        } else {
+            self.props.chapter_number.to_owned()
+        };
+
+        if current_chapter_number != previous_page_chapter_number {
+            // We send a message to the agent to fetch the page list
+            // because we want to put it on the last page and not the first
+            self.manga_agent.send(MangaAction::GetPageList {
+                manga_id: self.props.manga_id,
+                chapter_number: previous_page_chapter_number.to_owned(),
+            });
+        } else {
+            let route = AppRoute::MangaChapterPage {
+                manga_id: self.props.manga_id,
+                chapter_number: self.props.chapter_number.to_owned(),
+                page_number: max(
+                    1,
+                    self.props
+                        .page_number
+                        .checked_sub(1)
+                        .unwrap_or(self.props.page_number),
+                ),
+            };
+            self.route_dispatcher
+                .send(RouteRequest::ChangeRoute(Route::from(route)));
+        }
+    }
+
+    fn page_forwards(&mut self) {
+        let last_page = self
+            .state
+            .pages
+            .as_ref()
+            .map_or(self.props.page_number, |pages| pages.len());
+        let current_chapter_number = self.props.chapter_number.to_owned();
+
+        let next_page_chapter_number = if self.props.page_number == last_page {
+            self.state
+                .chapters
+                .as_ref()
+                .map_or(current_chapter_number.to_owned(), |chapter_list| {
+                    get_next_chapter_number(chapter_list, current_chapter_number)
+                })
+        } else {
+            self.props.chapter_number.to_owned()
+        };
+
+        let route = if next_page_chapter_number == self.props.chapter_number {
+            let next_page_number = self.props.page_number as usize + 1;
+            if next_page_number > last_page {
+                AppRoute::ChapterList {
+                    manga_id: self.props.manga_id,
+                }
+            } else {
+                AppRoute::MangaChapterPage {
+                    manga_id: self.props.manga_id,
+                    chapter_number: next_page_chapter_number.to_owned(),
+                    page_number: next_page_number,
+                }
+            }
+        } else {
+            AppRoute::MangaChapterPage {
+                manga_id: self.props.manga_id,
+                chapter_number: next_page_chapter_number.to_owned(),
+                page_number: 1,
+            }
+        };
+
+        self.route_dispatcher
+            .send(RouteRequest::ChangeRoute(Route::from(route)));
+    }
+}
+
+fn get_next_chapter_number(
+    chapter_list: &Rc<Vec<Chapter>>,
+    current_chapter_number: String,
+) -> String {
+    let mut iter = chapter_list.iter();
+    let last: RefCell<Option<&Chapter>> = RefCell::new(chapter_list.first());
+    while let Some(chapter) = iter.next() {
+        if chapter.chapter_number == current_chapter_number {
+            return iter.next().map_or(
+                last.into_inner()
+                    .map_or(current_chapter_number.to_owned(), |ch| {
+                        ch.chapter_number.to_owned()
+                    }),
+                |ch| ch.chapter_number.to_owned(),
+            );
+        }
+        last.replace(Some(chapter));
+    }
+    last.into_inner()
+        .map_or(current_chapter_number.to_owned(), |ch| {
+            ch.chapter_number.to_owned()
+        })
+}
+
+fn get_previous_chapter_number(
+    chapter_list: &Rc<Vec<Chapter>>,
+    current_chapter_number: String,
+) -> String {
+    let mut iter = chapter_list.iter();
+    let prev: RefCell<Option<&Chapter>> = RefCell::new(chapter_list.first());
+    while let Some(chapter) = iter.next() {
+        if chapter.chapter_number == current_chapter_number {
+            return prev
+                .into_inner()
+                .map_or(current_chapter_number.to_owned(), |ch| {
+                    ch.chapter_number.to_owned()
+                });
+        }
+        prev.replace(Some(chapter));
+    }
+    prev.into_inner()
+        .map_or(current_chapter_number.to_owned(), |ch| {
+            ch.chapter_number.to_owned()
+        })
 }
