@@ -1,0 +1,18 @@
+[package]
+name = "llrs-api"
+version = "0.1.0"
+authors = ["limegrass <james@niis.me>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+libllrs = { version = "0.1.0", path = "../libllrs" }
+tokio = { version = "1", features = ["full"] }
+warp = "0.3.0"
+log = "0.4.14"
+clap = "2.33.3"
+nameof = "1.2.1"
+env_logger = "0.8.2"
+serde = "1.0.123"
+tiberius = "0.5.5"
