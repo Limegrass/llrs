@@ -1,0 +1,13 @@
+*.vim
+
+# Cargo
+target
+
+# rustfmt backup
+**/*.rs.bk
+
+# JS
+node_modules
+dist
+pkg
+wasm-pack.log
