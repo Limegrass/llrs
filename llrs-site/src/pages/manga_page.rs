@@ -1,8 +1,12 @@
 use super::progress::progress_bar;
-use crate::agents::manga::{Action as MangaAction, MangaAgent, Response as MangaAgentResponse};
+use crate::agents::{
+    manga::{Action as MangaAction, MangaAgent, Response as MangaAgentResponse},
+    user::{Action as UserAgentAction, Response as UserAgentResponse, UserAgent},
+};
 use crate::route::AppRoute;
 use llrs_model::{Chapter, Page};
 use log::*;
+use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, cmp::max, rc::Rc};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -22,8 +26,8 @@ pub(crate) struct State {
     is_loaded_page: Option<Vec<bool>>,
 }
 
-#[allow(dead_code)]
-enum ViewFormat {
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) enum ViewFormat {
     Single,
     Long,
 }
@@ -31,6 +35,8 @@ enum ViewFormat {
 pub(crate) struct MangaPage {
     #[allow(dead_code)]
     manga_agent: Box<dyn Bridge<MangaAgent>>,
+    #[allow(dead_code)]
+    user_agent: Box<dyn Bridge<UserAgent>>,
     route_dispatcher: RouteAgentDispatcher,
     prefetcher: Option<HtmlImageElement>,
     window: Option<Window>,
@@ -43,6 +49,7 @@ pub(crate) struct MangaPage {
 pub(crate) enum Msg {
     PreloadNextImage { page_index: usize },
     MangaAgentResponse(MangaAgentResponse),
+    UserAgentResponse(UserAgentResponse),
     PageBack,
     PageForward,
 }
@@ -70,6 +77,9 @@ impl Component for MangaPage {
             chapter_number: props.chapter_number.to_owned(),
         });
 
+        let mut user_agent = UserAgent::bridge(link.callback(Msg::UserAgentResponse));
+        user_agent.send(UserAgentAction::GetViewFormatPreference);
+
         let state = State {
             chapters: None,
             pages: None,
@@ -89,6 +99,7 @@ impl Component for MangaPage {
             props,
             link,
             window,
+            user_agent,
         }
     }
 
@@ -128,6 +139,16 @@ impl Component for MangaPage {
                 self.page_forwards();
                 false
             }
+            Msg::UserAgentResponse(response) => match response {
+                UserAgentResponse::ViewFormatPreference(view_format) => {
+                    if view_format != self.state.view_format {
+                        self.state.view_format = view_format;
+                        true
+                    } else {
+                        false
+                    }
+                }
+            },
         }
     }
 
