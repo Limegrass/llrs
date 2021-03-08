@@ -1,4 +1,5 @@
 use crate::pages::ViewFormat;
+use std::collections::HashSet;
 use yew::{
     format::Json,
     services::{storage::Area as StorageArea, StorageService},
@@ -10,26 +11,13 @@ const READER_PREFERENCE_KEY: &'static str = "llrs.reader.view";
 pub(crate) struct UserAgent {
     storage: Option<StorageService>,
     link: AgentLink<Self>,
-}
-
-fn get_view_format_response_or_default(agent: &UserAgent) -> Response {
-    Response::ViewFormatPreference(
-        agent
-            .storage
-            .as_ref()
-            .map_or(ViewFormat::Single, |storage| {
-                if let Json(Ok(view_format)) = storage.restore(READER_PREFERENCE_KEY) {
-                    view_format
-                } else {
-                    ViewFormat::Single
-                }
-            }),
-    )
+    subscribers: HashSet<HandlerId>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum Action {
     GetViewFormatPreference,
+    SetViewFormatPreference(ViewFormat),
 }
 
 #[derive(Debug)]
@@ -46,7 +34,11 @@ impl Agent for UserAgent {
     fn create(link: AgentLink<Self>) -> Self {
         // We're fine with not having a local storage of the preferences, use defaults
         let storage = StorageService::new(StorageArea::Local).ok();
-        Self { storage, link }
+        Self {
+            storage,
+            link,
+            subscribers: HashSet::new(),
+        }
     }
 
     fn update(&mut self, _: Self::Message) {}
@@ -55,7 +47,39 @@ impl Agent for UserAgent {
         match input {
             Action::GetViewFormatPreference => self
                 .link
-                .respond(requester, get_view_format_response_or_default(self)),
+                .respond(requester, self.get_view_format_response_or_default()),
+            Action::SetViewFormatPreference(view_format) => {
+                if let Some(storage) = &mut self.storage {
+                    storage.store(READER_PREFERENCE_KEY, Json(&view_format));
+                    for sub in &self.subscribers {
+                        self.link
+                            .respond(*sub, self.get_view_format_response_or_default())
+                    }
+                }
+            }
         }
+    }
+
+    fn connected(&mut self, id: HandlerId) {
+        self.subscribers.insert(id);
+    }
+
+    fn disconnected(&mut self, id: HandlerId) {
+        self.subscribers.remove(&id);
+    }
+}
+
+impl UserAgent {
+    fn get_view_format_response_or_default(&self) -> Response {
+        Response::ViewFormatPreference(self.storage.as_ref().map_or(
+            ViewFormat::Single,
+            |storage| {
+                if let Json(Ok(view_format)) = storage.restore(READER_PREFERENCE_KEY) {
+                    view_format
+                } else {
+                    ViewFormat::Single
+                }
+            },
+        ))
     }
 }

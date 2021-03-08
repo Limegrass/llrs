@@ -1,6 +1,9 @@
-use crate::{agents::manga::Response as MangaResponse, route::AppRoute};
+use crate::{agents::manga::Response as MangaResponse, pages::ViewFormat, route::AppRoute};
 use crate::{
-    agents::manga::{Action as MangaAction, MangaAgent},
+    agents::{
+        manga::{Action as MangaAction, MangaAgent},
+        user::{Action as UserAgentAction, Response as UserAgentResponse, UserAgent},
+    },
     components::{
         breadcrumb::{Breadcrumb, Separator},
         navbar::Navbar,
@@ -16,11 +19,14 @@ const LLRS_BRAND_LOGO_URL: &'static str = env!("LLRS_BRAND_LOGO_URL");
 type Anchor = RouterAnchor<AppRoute>;
 
 struct State {
+    view_format: ViewFormat,
     mangas: Option<Rc<HashMap<i32, Manga>>>,
 }
 
 pub(super) enum Msg {
-    AgentResponse(MangaResponse),
+    MangaAgentResponse(MangaResponse),
+    UserAgentResponse(UserAgentResponse),
+    ToggleViewFormat,
 }
 
 #[derive(Clone, PartialEq, Properties)]
@@ -31,6 +37,8 @@ pub(super) struct Props {
 pub(super) struct AppNavbar {
     #[allow(dead_code)]
     manga_agent: Box<dyn Bridge<MangaAgent>>,
+    #[allow(dead_code)]
+    user_agent: Box<dyn Bridge<UserAgent>>,
     #[allow(dead_code)]
     link: ComponentLink<Self>,
     state: State,
@@ -43,24 +51,52 @@ impl Component for AppNavbar {
     type Properties = Props;
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
-        let mut manga_agent = MangaAgent::bridge(link.callback(Msg::AgentResponse));
+        let mut manga_agent = MangaAgent::bridge(link.callback(Msg::MangaAgentResponse));
         manga_agent.send(MangaAction::GetMangaList);
+
+        let mut user_agent = UserAgent::bridge(link.callback(Msg::UserAgentResponse));
+        user_agent.send(UserAgentAction::GetViewFormatPreference);
         Self {
             manga_agent,
+            user_agent,
             link,
             props,
-            state: State { mangas: None },
+            state: State {
+                mangas: None,
+                view_format: ViewFormat::Single,
+            },
         }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::AgentResponse(response) => match response {
-                MangaResponse::MangaMap { mangas } => self.state.mangas = Some(mangas),
-                _ => {}
+            Msg::MangaAgentResponse(response) => match response {
+                MangaResponse::MangaMap { mangas } => {
+                    self.state.mangas = Some(mangas);
+                    true
+                }
+                _ => false,
             },
-        };
-        true
+            Msg::UserAgentResponse(response) => match response {
+                UserAgentResponse::ViewFormatPreference(view_format) => {
+                    if self.state.view_format == view_format {
+                        false // same format, no update needed
+                    } else {
+                        self.state.view_format = view_format;
+                        true
+                    }
+                }
+            },
+            Msg::ToggleViewFormat => {
+                let other_view_format = match self.state.view_format {
+                    ViewFormat::Single => ViewFormat::Long,
+                    ViewFormat::Long => ViewFormat::Single,
+                };
+                self.user_agent
+                    .send(UserAgentAction::SetViewFormatPreference(other_view_format));
+                false
+            }
+        }
     }
 
     fn change(&mut self, props: Self::Properties) -> ShouldRender {
@@ -70,11 +106,15 @@ impl Component for AppNavbar {
 
     fn view(&self) -> Html {
         let brand_links = self.get_brand_links();
-        let menu_links = self.get_menu_links();
+        let menu_start_links = self.get_menu_start_links();
+        let menu_end_links = self.get_menu_end_links();
         html! {
             <Navbar brand_children={brand_links}>
+                <div class="navbar-start">
+                    {menu_start_links}
+                </div>
                 <div class="navbar-end">
-                    {menu_links}
+                    {menu_end_links}
                 </div>
             </Navbar>
         }
@@ -107,7 +147,32 @@ impl AppNavbar {
         }
     }
 
-    fn get_menu_links(&self) -> Html {
+    fn get_menu_start_links(&self) -> Html {
+        match &self.props.route {
+            AppRoute::MangaChapterPage {
+                manga_id: _,
+                chapter_number: _,
+                page_number: _,
+            }
+            | AppRoute::MangaChapter {
+                manga_id: _,
+                chapter_number: _,
+            } => {
+                let toggle_button_text = match self.state.view_format {
+                    ViewFormat::Single => "Change to scroll view",
+                    ViewFormat::Long => "Change to page view",
+                };
+                html! {
+                    <a class="navbar-item" onclick=self.link.callback(|_| Msg::ToggleViewFormat)>
+                        {toggle_button_text}
+                    </a>
+                }
+            }
+            _ => html! {},
+        }
+    }
+
+    fn get_menu_end_links(&self) -> Html {
         let waifusims_link = html! {
             <a class="navbar-item" href="https://waifusims.com/Manga">
                 {"Waifusims Reader"}
