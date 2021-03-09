@@ -52,6 +52,7 @@ pub(crate) enum Msg {
     UserAgentResponse(UserAgentResponse),
     PageBack { current_page_number: usize },
     PageForward { current_page_number: usize },
+    ScrollToPage { page_number: usize },
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
@@ -114,7 +115,9 @@ impl Component for MangaPage {
             // we can just wait until we get a response for the new list of pages
             false
         } else {
-            self.scroll_to_manga_page_top(props.page_number);
+            self.link.send_message(Msg::ScrollToPage {
+                page_number: props.page_number,
+            });
             self.props = props;
             true
         }
@@ -152,6 +155,10 @@ impl Component for MangaPage {
                     }
                 }
             },
+            Msg::ScrollToPage { page_number } => {
+                self.scroll_to_manga_page_top(page_number);
+                false
+            }
         }
     }
 
@@ -308,7 +315,9 @@ impl MangaPage {
                         .send(RouteRequest::ChangeRoute(Route::from(route)));
                     false
                 } else {
-                    self.scroll_to_manga_page_top(self.props.page_number);
+                    self.link.send_message(Msg::ScrollToPage {
+                        page_number: self.props.page_number,
+                    });
                     true
                 }
             }
