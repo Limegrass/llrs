@@ -126,10 +126,7 @@ impl Component for MangaPage {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         trace!("{:?}", msg);
         match msg {
-            Msg::PreloadImage { page_index } => {
-                self.preload_image_and_set_next(page_index);
-                false
-            }
+            Msg::PreloadImage { page_index } => self.preload_image_and_set_next(page_index),
             Msg::MangaAgentResponse(response) => self.handle_manga_response(response),
             Msg::PageBack {
                 current_page_number,
@@ -229,7 +226,7 @@ impl MangaPage {
         }
     }
 
-    fn preload_image_and_set_next(&mut self, page_index: usize) {
+    fn preload_image_and_set_next(&mut self, page_index: usize) -> bool {
         match self.state.pages.as_ref() {
             Some(pages) if pages.len() > 0 => {
                 if let (Some(page), Some(image_element)) = (pages.get(page_index), &self.prefetcher)
@@ -245,15 +242,24 @@ impl MangaPage {
                         });
                     if let Some(closure) = load_next_page_closure {
                         image_element.set_onload(Some(closure.as_ref().unchecked_ref()));
+                        // TODO: Research can this still leak memory if the image doesn't load
+                        // before the page gets destroyed, not sure given that
+                        // the HtmlImageElement should get cleaned up.
                         closure.forget();
                     } else {
                         image_element.set_onload(None);
                     }
                     image_element.set_src(&page.url_string);
+                    match self.state.view_format {
+                        ViewFormat::Single => false,
+                        ViewFormat::Long => true,
+                    }
+                } else {
+                    false
                 }
             }
-            _ => {}
-        };
+            _ => false,
+        }
     }
 
     fn handle_manga_response(&mut self, response: MangaAgentResponse) -> ShouldRender {
