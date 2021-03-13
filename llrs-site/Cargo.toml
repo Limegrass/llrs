@@ -18,7 +18,7 @@ wasm-logger = "0.2"
 wee_alloc = { version = "0.4", optional = true }
 yew = "0.17"
 yew-router = "0.14"
-# chrono = { version = "0.4", features = ["serde", "wasmbind"] }
+js-sys = "0.3"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

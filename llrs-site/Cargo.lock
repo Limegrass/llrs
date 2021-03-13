@@ -319,6 +319,7 @@ name = "llrs-site"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "js-sys",
  "llrs_model",
  "log",
  "serde",

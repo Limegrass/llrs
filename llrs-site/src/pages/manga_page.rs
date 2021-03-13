@@ -4,19 +4,30 @@ use crate::agents::{
     user::{Action as UserAgentAction, Response as UserAgentResponse, UserAgent},
 };
 use crate::route::AppRoute;
+use js_sys::Date;
 use llrs_model::{Chapter, Page};
 use log::*;
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, cmp::max, collections::VecDeque, rc::Rc};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc, time::Duration};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlImageElement, ScrollBehavior, ScrollToOptions, Window};
-use yew::{agent::Bridge, prelude::*, Component, ComponentLink};
+use yew::{
+    agent::Bridge,
+    prelude::*,
+    services::{interval::IntervalTask, IntervalService},
+    Component, ComponentLink,
+};
 use yew_router::{
     agent::RouteRequest,
     prelude::{Route, RouteAgentDispatcher},
     switch::Permissive,
 };
+
+// TODO: Split off Long form from single page form
+// TODO: Create a helper struct to handle {page: Page, is_visible: bool}
+
+const LONG_FORM_BACK_PAGE_BUFFER_SECONDS: f64 = 1f64 * 1000f64;
 
 pub(crate) struct State {
     pages: Option<Rc<Vec<Page>>>,
@@ -24,6 +35,12 @@ pub(crate) struct State {
     view_format: ViewFormat,
     should_set_to_last_page: bool,
     preload_queue: VecDeque<usize>,
+    /// Only used in scroll view
+    is_visible: Vec<bool>,
+    #[allow(dead_code)]
+    scroll_handler: Option<Closure<dyn FnMut()>>,
+    prior_render_time_seconds: f64,
+    prior_scroll_y: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -39,6 +56,8 @@ pub(crate) struct MangaPage {
     user_agent: Box<dyn Bridge<UserAgent>>,
     route_dispatcher: RouteAgentDispatcher,
     prefetcher: Option<HtmlImageElement>,
+    #[allow(dead_code)]
+    interval_task: IntervalTask,
     window: Option<Window>,
     state: State,
     props: Props,
@@ -47,12 +66,24 @@ pub(crate) struct MangaPage {
 
 #[derive(Debug)]
 pub(crate) enum Msg {
-    PreloadImage { page_index: usize },
+    PreloadImage {
+        page_index: usize,
+    },
     MangaAgentResponse(MangaAgentResponse),
     UserAgentResponse(UserAgentResponse),
-    PageBack { current_page_number: usize },
-    PageForward { current_page_number: usize },
-    ScrollToPage { page_number: usize },
+    PageBack {
+        current_page_number: usize,
+    },
+    PageForward {
+        current_page_number: usize,
+    },
+    // Sending the message essential schedules it to run
+    // after the current render cycle completes
+    ScrollToPage {
+        page_number: usize,
+        scroll_behavior: ScrollBehavior,
+    },
+    PageRepositioned,
 }
 
 #[derive(Debug, Clone, PartialEq, Properties)]
@@ -68,6 +99,10 @@ impl Component for MangaPage {
 
     fn create(props: Self::Properties, link: ComponentLink<Self>) -> Self {
         trace!("manga_page: {:?}", props);
+        let interval_task = IntervalService::spawn(
+            Duration::from_secs(LONG_FORM_BACK_PAGE_BUFFER_SECONDS as u64),
+            link.callback(|_| Msg::PageRepositioned),
+        );
 
         let mut manga_agent = MangaAgent::bridge(link.callback(Msg::MangaAgentResponse));
         manga_agent.send(MangaAction::GetChapterList {
@@ -81,16 +116,22 @@ impl Component for MangaPage {
         let mut user_agent = UserAgent::bridge(link.callback(Msg::UserAgentResponse));
         user_agent.send(UserAgentAction::GetViewFormatPreference);
 
+        let route_dispatcher = RouteAgentDispatcher::new();
+        let window = web_sys::window();
+        let prior_load_date_time = Date::now();
+
         let state = State {
             chapters: None,
             pages: None,
             view_format: ViewFormat::Single,
             should_set_to_last_page: false,
             preload_queue: VecDeque::new(),
+            is_visible: vec![],
+            scroll_handler: None,
+            // random extra buffer who cares lul
+            prior_render_time_seconds: prior_load_date_time + 5000f64,
+            prior_scroll_y: 0f64,
         };
-
-        let route_dispatcher = RouteAgentDispatcher::new();
-        let window = web_sys::window();
 
         Self {
             prefetcher: HtmlImageElement::new().ok(),
@@ -101,6 +142,7 @@ impl Component for MangaPage {
             link,
             window,
             user_agent,
+            interval_task,
         }
     }
 
@@ -117,6 +159,10 @@ impl Component for MangaPage {
         } else {
             self.link.send_message(Msg::ScrollToPage {
                 page_number: props.page_number,
+                scroll_behavior: match self.state.view_format {
+                    ViewFormat::Single => ScrollBehavior::Smooth,
+                    ViewFormat::Long => ScrollBehavior::Instant,
+                },
             });
             self.props = props;
             true
@@ -124,7 +170,7 @@ impl Component for MangaPage {
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
-        trace!("{:?}", msg);
+        info!("{:?}", msg);
         match msg {
             Msg::PreloadImage { page_index } => self.preload_image_and_set_next(page_index),
             Msg::MangaAgentResponse(response) => self.handle_manga_response(response),
@@ -142,20 +188,18 @@ impl Component for MangaPage {
                 self.page_forward(current_page_number);
                 false
             }
-            Msg::UserAgentResponse(response) => match response {
-                UserAgentResponse::ViewFormatPreference(view_format) => {
-                    if view_format != self.state.view_format {
-                        self.state.view_format = view_format;
-                        true
-                    } else {
-                        false
-                    }
-                }
-            },
-            Msg::ScrollToPage { page_number } => {
-                self.scroll_to_manga_page_top(page_number);
+            Msg::UserAgentResponse(response) => self.update_view_format(response),
+            Msg::ScrollToPage {
+                page_number,
+                scroll_behavior,
+            } => {
+                self.scroll_to_manga_page_top(page_number, scroll_behavior);
                 false
             }
+            Msg::PageRepositioned => match self.handle_page_repositioning() {
+                Ok(should_render) => should_render,
+                Err(should_render) => should_render,
+            },
         }
     }
 
@@ -169,7 +213,41 @@ impl Component for MangaPage {
 
 // Check the Chapter Agent to see which chapter is next
 impl MangaPage {
-    fn scroll_to_manga_page_top(&self, page_number: usize) {
+    /// Returns None if it would be paging to page 0
+    fn previous_page_number(&self) -> Option<usize> {
+        self.props
+            .page_number
+            .checked_sub(1)
+            .map_or(None, |previous_pn| {
+                if previous_pn == 0 {
+                    None
+                } else {
+                    Some(previous_pn)
+                }
+            })
+    }
+
+    /// Returns None if it would be paging past available pages
+    fn next_page_number(&self) -> Option<usize> {
+        self.props
+            .page_number
+            .checked_add(1)
+            .map_or(None, |next_pn| {
+                if next_pn
+                    > self
+                        .state
+                        .pages
+                        .as_ref()
+                        .map_or(self.props.page_number, |pages| pages.len())
+                {
+                    None
+                } else {
+                    Some(next_pn)
+                }
+            })
+    }
+
+    fn scroll_to_manga_page_top(&self, page_number: usize, scroll_behavior: ScrollBehavior) {
         if let Some(window) = self.window.as_ref() {
             if let Some(doc) = window.document() {
                 let mut scroll_to_options = ScrollToOptions::new();
@@ -181,26 +259,135 @@ impl MangaPage {
                     .get_element_by_id(element_to_scroll_to_top.as_str())
                     .map_or(0.0, |element| element.get_bounding_client_rect().top());
                 scroll_to_options.top(manga_page_top);
-                scroll_to_options.behavior(ScrollBehavior::Smooth);
+                scroll_to_options.behavior(scroll_behavior);
                 window.scroll_by_with_scroll_to_options(&scroll_to_options);
             }
         }
     }
 
+    fn handle_page_repositioning(&mut self) -> Result<ShouldRender, ShouldRender> {
+        let mut should_render = false;
+        let window = self.window.as_ref().ok_or(false)?;
+        let doc = window.document().ok_or(false)?;
+        let viewport_height = window
+            .inner_height()
+            .map(|js_value| js_value.as_f64().ok_or(false))
+            .map_err(|_| false)??;
+        let half_viewport = viewport_height / 2f64;
+        let document_element = doc.document_element().ok_or(false)?;
+
+        let current_scroll_y = window.scroll_y().unwrap_or(self.state.prior_scroll_y);
+        let element_to_scroll_to_top = match self.state.view_format {
+            ViewFormat::Single => return Err(false),
+            ViewFormat::Long => format!("manga-page-{}", self.props.page_number),
+        };
+
+        // Allows previous page to render
+        if let Some(previous_page_number) = self.previous_page_number() {
+            let mut should_update_props_and_route = false;
+
+            if let Some(bounding_client_rect) = doc
+                .get_element_by_id(element_to_scroll_to_top.as_str())
+                .map(|element| element.get_bounding_client_rect())
+            {
+                // Debounce previous page reloads so they don't all load at once.
+                let current_time_seconds = Date::now();
+                if current_time_seconds - LONG_FORM_BACK_PAGE_BUFFER_SECONDS
+                    > self.state.prior_render_time_seconds
+                    && bounding_client_rect.top() > 0f64
+                {
+                    self.state.prior_render_time_seconds = current_time_seconds;
+                    match self
+                        .state
+                        .is_visible
+                        .get_mut(previous_page_number.checked_sub(1).unwrap_or(0))
+                    {
+                        Some(previous_page_visibility) if !*previous_page_visibility => {
+                            *previous_page_visibility = true;
+                            should_render = true;
+                            should_update_props_and_route = true;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            if let Some(previous_page_bounding_box) = doc
+                .get_element_by_id(format!("manga-page-{}", previous_page_number).as_str())
+                .map(|element| element.get_bounding_client_rect())
+            {
+                // scrolled up
+                if previous_page_bounding_box.bottom() > half_viewport
+                    && current_scroll_y <= self.state.prior_scroll_y
+                {
+                    should_update_props_and_route = true;
+                }
+            }
+
+            if should_update_props_and_route {
+                self.props.page_number = previous_page_number;
+                let route = AppRoute::MangaChapterPage {
+                    manga_id: self.props.manga_id,
+                    chapter_number: self.props.chapter_number.to_owned(),
+                    page_number: previous_page_number,
+                };
+                self.route_dispatcher
+                    .send(RouteRequest::ChangeRouteNoBroadcast(Route::from(route)));
+            }
+        }
+
+        if let Some(next_page_number) = self.next_page_number() {
+            if let Some(next_page_bounding_box) = doc
+                .get_element_by_id(format!("manga-page-{}", next_page_number).as_str())
+                .map(|element| element.get_bounding_client_rect())
+            {
+                if next_page_bounding_box.top() < half_viewport
+                    && self.state.prior_scroll_y < current_scroll_y
+                {
+                    self.props.page_number = next_page_number;
+                    let route = AppRoute::MangaChapterPage {
+                        manga_id: self.props.manga_id,
+                        chapter_number: self.props.chapter_number.to_owned(),
+                        page_number: next_page_number,
+                    };
+                    self.route_dispatcher
+                        .send(RouteRequest::ChangeRouteNoBroadcast(Route::from(route)));
+                }
+            }
+
+            let document_height = document_element.scroll_height() as f64;
+            if document_height - current_scroll_y - viewport_height < 200f64 {
+                match self.state.is_visible.get_mut(self.props.page_number) {
+                    Some(next_page_visibility) if !*next_page_visibility => {
+                        *next_page_visibility = true;
+                        should_render = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        self.state.prior_scroll_y = current_scroll_y;
+        Ok(should_render)
+    }
+
     fn render_view(&self, pages: &[Page]) -> Html {
         if let Some(page_index) = self.props.page_number.checked_sub(1) {
-            let pages = match self.state.view_format {
+            let page_render = match self.state.view_format {
                 // TODO: Progressive loading (first page first)
                 ViewFormat::Long => html! {
-                    for pages.iter().map(|page| self.manga_page(&page))
+                    for pages.iter()
+                        .enumerate()
+                        .filter(|(index, _)| *self.state.is_visible.get(*index).unwrap_or(&false))
+                        .map(|(_, page)| self.manga_page(Some(page)))
                 },
                 ViewFormat::Single => html! {
-                    self.manga_page(&pages[page_index])
+                    self.manga_page(pages.get(page_index))
                 },
             };
             html! {
                 <figure class="container image">
-                    {pages}
+                    {page_render}
                 </figure>
             }
         } else {
@@ -209,20 +396,29 @@ impl MangaPage {
         }
     }
 
-    fn manga_page(&self, page: &Page) -> Html {
-        let current_page_number = page.page_number as usize;
+    fn manga_page(&self, page: Option<&Page>) -> Html {
+        if let Some(page) = page {
+            let current_page_number = page.page_number as usize;
+            let onload_callback = match self.state.view_format {
+                ViewFormat::Single => yew::callback::Callback::noop(),
+                ViewFormat::Long => self.link.callback(|_| Msg::PageRepositioned),
+            };
 
-        html! {
-            <div id=format!("manga-page-{}", page.page_number) class="container">
-                <div class="back-pager"
-                    onclick=self.link.callback(move |_| Msg::PageBack { current_page_number }) />
-                <div class="forward-pager"
-                    onclick=self.link.callback(move |_| Msg::PageForward { current_page_number }) />
-                <img id="manga-image"
-                     src=&page.url_string
-                     alt=format!("Page {} Image", &page.page_number)
-                 />
-            </div>
+            html! {
+                <div id=format!("manga-page-{}", page.page_number) class="container">
+                    <div class="back-pager"
+                        onclick=self.link.callback(move |_| Msg::PageBack { current_page_number }) />
+                    <div class="forward-pager"
+                        onclick=self.link.callback(move |_| Msg::PageForward { current_page_number }) />
+                    <img id="manga-image"
+                         src=&page.url_string
+                         alt=format!("Page {} Image", &page.page_number)
+                         onload=onload_callback
+                     />
+                </div>
+            }
+        } else {
+            html! {}
         }
     }
 
@@ -231,9 +427,10 @@ impl MangaPage {
             Some(pages) if pages.len() > 0 => {
                 if let (Some(page), Some(image_element)) = (pages.get(page_index), &self.prefetcher)
                 {
+                    let link = self.link.clone();
                     let load_next_page_closure =
                         self.state.preload_queue.pop_front().map(|next_page_index| {
-                            let link = self.link.clone();
+                            // Once closures cleans up their resources after one call
                             Closure::once(Box::new(move || {
                                 link.send_message(Msg::PreloadImage {
                                     page_index: next_page_index,
@@ -279,6 +476,7 @@ impl MangaPage {
                 let route =
                     // also catches people url hacking to a big number
                     if self.state.should_set_to_last_page || pages.len() < self.props.page_number {
+                        self.props.page_number = pages.len();
                         Some(AppRoute::MangaChapterPage {
                             manga_id: self.props.manga_id,
                             chapter_number: self.props.chapter_number.to_owned(),
@@ -315,6 +513,11 @@ impl MangaPage {
                     self.link.send_message(Msg::PreloadImage { page_index });
                 }
 
+                self.state.is_visible = pages
+                    .iter()
+                    .enumerate()
+                    .map(|(index, _)| self.props.page_number.checked_sub(1).unwrap_or(0) == index)
+                    .collect();
                 self.state.pages = Some(pages);
                 if let Some(route) = route {
                     self.route_dispatcher
@@ -323,6 +526,7 @@ impl MangaPage {
                 } else {
                     self.link.send_message(Msg::ScrollToPage {
                         page_number: self.props.page_number,
+                        scroll_behavior: ScrollBehavior::Smooth,
                     });
                     true
                 }
@@ -352,12 +556,10 @@ impl MangaPage {
                 chapter_number: previous_page_chapter_number.to_owned(),
             });
         } else {
-            let previous_page_number = max(
-                1,
-                current_page_number
-                    .checked_sub(1)
-                    .unwrap_or(current_page_number),
-            );
+            let previous_page_number = current_page_number
+                .checked_sub(1)
+                .unwrap_or(current_page_number)
+                .max(1);
             let route = AppRoute::MangaChapterPage {
                 manga_id: self.props.manga_id,
                 chapter_number: self.props.chapter_number.to_owned(),
@@ -413,6 +615,55 @@ impl MangaPage {
         self.route_dispatcher
             .send(RouteRequest::ChangeRoute(Route::from(route)));
     }
+
+    fn update_view_format(&mut self, response: UserAgentResponse) -> ShouldRender {
+        match response {
+            UserAgentResponse::ViewFormatPreference(view_format) => {
+                if view_format != self.state.view_format {
+                    // This will overwrite other potential onscroll functions on Window,
+                    // which could be an issue in the future, but it's fine for now
+                    // since this is the only place we assign it.
+                    if let Some(window) = &self.window {
+                        self.state.scroll_handler = set_and_return_repositioning_handler(
+                            &view_format,
+                            window,
+                            self.link.clone(),
+                        );
+                    }
+
+                    self.state.view_format = view_format;
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+}
+
+fn set_and_return_repositioning_handler(
+    view_format: &ViewFormat,
+    window: &Window,
+    link: ComponentLink<MangaPage>,
+) -> Option<Closure<dyn FnMut()>> {
+    match &view_format {
+        ViewFormat::Single => {
+            window.set_onscroll(None);
+            window.set_onresize(None);
+            None
+        }
+        ViewFormat::Long => {
+            let link_clone = link.clone();
+            let closure =
+                Closure::wrap(
+                    Box::new(move || link_clone.send_message(Msg::PageRepositioned))
+                        as Box<dyn FnMut()>,
+                );
+            window.set_onscroll(Some(closure.as_ref().unchecked_ref()));
+            window.set_onresize(Some(closure.as_ref().unchecked_ref()));
+            Some(closure)
+        }
+    }
 }
 
 fn get_next_chapter_number(
@@ -460,3 +711,7 @@ fn get_previous_chapter_number(
             ch.chapter_number.to_owned()
         })
 }
+
+// TODO: Make a bunch of useless traits that are implemented by default
+// by components/windows/documents/elements/whatever and then split it up into small functions.
+// Then just pass some garbage in and take in trait objects so that it's mockable for tests
