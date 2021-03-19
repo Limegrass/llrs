@@ -41,6 +41,7 @@ pub(crate) struct State {
     scroll_handler: Option<Closure<dyn FnMut()>>,
     prior_render_time_seconds: f64,
     prior_scroll_y: f64,
+    preloader_closure: Option<Closure<dyn FnMut()>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -131,6 +132,7 @@ impl Component for MangaPage {
             // random extra buffer who cares lul
             prior_render_time_seconds: prior_load_date_time + 5000f64,
             prior_scroll_y: 0f64,
+            preloader_closure: None,
         };
 
         Self {
@@ -374,7 +376,7 @@ impl MangaPage {
     fn render_view(&self, pages: &[Page]) -> Html {
         if let Some(page_index) = self.props.page_number.checked_sub(1) {
             let page_render = match self.state.view_format {
-                // TODO: Progressive loading (first page first)
+                // TODO: Button to load previous pages instead of automatically
                 ViewFormat::Long => html! {
                     for pages.iter()
                         .enumerate()
@@ -437,15 +439,16 @@ impl MangaPage {
                                 });
                             }))
                         });
-                    if let Some(closure) = load_next_page_closure {
+                    if let Some(closure) = &load_next_page_closure {
                         image_element.set_onload(Some(closure.as_ref().unchecked_ref()));
-                        // TODO: Research can this still leak memory if the image doesn't load
-                        // before the page gets destroyed, not sure given that
-                        // the HtmlImageElement should get cleaned up.
-                        closure.forget();
                     } else {
                         image_element.set_onload(None);
                     }
+
+                    // To avoid a potential memory leak from using `closure.forget()`
+                    // in the case of destroying this instance before the image finishes loading,
+                    // we save the closure here so that it can get naturally cleaned up.
+                    self.state.preloader_closure = load_next_page_closure;
                     image_element.set_src(&page.url_string);
                     match self.state.view_format {
                         ViewFormat::Single => false,
