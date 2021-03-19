@@ -211,6 +211,13 @@ impl Component for MangaPage {
             None => progress_bar(),
         }
     }
+
+    fn destroy(&mut self) {
+        if let Some(window) = &self.window {
+            window.set_onscroll(None);
+            window.set_onresize(None);
+        }
+    }
 }
 
 // Check the Chapter Agent to see which chapter is next
