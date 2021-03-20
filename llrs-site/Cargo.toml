@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 anyhow = "1.0"
-llrs_model = { version = "0.1", features = ["serde"], path = "../llrs-model" }
+llrs_model = { version = "0.1", features = ["full"], path = "../llrs-model" }
 log = { version = "0.4", features = ["release_max_level_error"] }
 serde = "1"
 serde_derive = "1"

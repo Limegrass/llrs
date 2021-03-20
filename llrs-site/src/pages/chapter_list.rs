@@ -83,8 +83,9 @@ impl Component for ChapterList {
             Some(chapters) => html! {
                     <table class="table is-fullwidth is-striped is-narrow">
                         <thead>
-                            <th> { "Chapter Number" } </th>
-                            <th> { "Chapter Name" } </th>
+                            <th style="width: 25%;"> { "Chapter Number" } </th>
+                            <th style="width: 60%;"> { "Chapter Name" } </th>
+                            <th style="width: 15%;"> { "Release Date" } </th>
                         </thead>
                         <tbody>
                             {for chapters.iter().map(|val| self.chapter_entry(&val))}
@@ -123,6 +124,14 @@ impl ChapterList {
                         chapter_number: chapter.chapter_number.to_owned(),
                     }>
                     {&chapter.chapter_name}
+                    </Anchor>
+                </td>
+                <td>
+                    <Anchor route=AppRoute::MangaChapter {
+                        manga_id: chapter.manga_id,
+                        chapter_number: chapter.chapter_number.to_owned(),
+                    }>
+                    {chapter.release_date.format("%Y-%m-%d")}
                     </Anchor>
                 </td>
             </tr>
