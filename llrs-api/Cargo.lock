@@ -412,6 +412,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a246d82be1c9d791c5dfde9a2bd045fc3cbba3fa2b11ad558f27d01712f00569"
 
 [[package]]
+name = "enumflags2"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83c8d82922337cd23a15f88b70d8e4ef5f11da38dd7cdb55e84dd5de99695da0"
+dependencies = [
+ "enumflags2_derive",
+]
+
+[[package]]
+name = "enumflags2_derive"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "946ee94e3dbf58fdd324f9ce245c7b238d46a66f00e86a020b71996349e46cce"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "env_logger"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1545,20 +1565,20 @@ dependencies = [
 
 [[package]]
 name = "tiberius"
-version = "0.5.5"
+version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "734da8b952e4ea5422af42459756ee5ff2a71f61dfb19823d9a2f8d582e9ee80"
+checksum = "97383edb2eac690d48010a75edff0b9cc99451bff60b506f6af66b575ce57297"
 dependencies = [
  "async-native-tls",
  "async-stream 0.2.1",
  "async-trait",
  "asynchronous-codec",
- "bitflags",
  "byteorder",
  "bytes",
  "chrono",
  "connection-string",
  "encoding",
+ "enumflags2",
  "futures",
  "futures-sink",
  "futures-util",
