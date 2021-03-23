@@ -1,9 +1,8 @@
 use clap::{App, Arg, ArgMatches};
-use libllrs::{Error as WaifusimsError, MangaService, Waifusims};
+use libllrs::{Auth, Config, Error as WaifusimsError, MangaService, Waifusims};
 use log::*;
 use nameof::name_of;
 use std::net::SocketAddr;
-use tiberius::{AuthMethod, Config};
 use warp::Filter;
 
 #[derive(Debug)]
@@ -18,6 +17,7 @@ struct SqlConfig {
     pub sql_pass: String,
     pub sql_domain: String,
     pub sql_database: String,
+    pub sql_port: Option<u16>,
 }
 
 impl<'a> From<ArgMatches<'a>> for ServerConfig {
@@ -46,12 +46,16 @@ impl<'a> From<ArgMatches<'a>> for ServerConfig {
             .value_of(name_of!(sql_database in SqlConfig))
             .expect("required")
             .to_owned();
+        let sql_port = arg_matches
+            .value_of(name_of!(sql_port in SqlConfig))
+            .map(|port_string| port_string.parse::<u16>().expect("invalid port number"));
 
         ServerConfig {
             addr,
             sql_config: SqlConfig {
                 sql_user,
                 sql_pass,
+                sql_port,
                 sql_domain,
                 sql_database,
             },
@@ -77,7 +81,7 @@ async fn main() {
         )
         .arg(
             Arg::with_name(name_of!(sql_user in SqlConfig))
-                .short("u")
+                .short("U")
                 .long("username")
                 .value_name("SQL_USERNAME")
                 .help("username for sql password auth")
@@ -86,7 +90,7 @@ async fn main() {
         )
         .arg(
             Arg::with_name(name_of!(sql_pass in SqlConfig))
-                .short("p")
+                .short("P")
                 .long("password")
                 .value_name("SQL_USER_PASSWORD")
                 .help("password for sql password auth")
@@ -95,8 +99,8 @@ async fn main() {
         )
         .arg(
             Arg::with_name(name_of!(sql_domain in SqlConfig))
-                .short("d")
-                .long("domain")
+                .short("h")
+                .long("host")
                 .value_name("SQL_SRV_ADDR")
                 .help("address of sql server")
                 .takes_value(true)
@@ -104,23 +108,34 @@ async fn main() {
         )
         .arg(
             Arg::with_name(name_of!(sql_database in SqlConfig))
-                .short("n")
-                .long("database-node")
+                .short("d")
+                .long("database")
                 .value_name("SQL_SRV_DATABASE")
                 .help("DATABASE DATABASE")
                 .takes_value(true)
                 .required(true),
         )
+        .arg(
+            Arg::with_name(name_of!(sql_port in SqlConfig))
+                .short("p")
+                .long("port")
+                .value_name("SQL_SRV_DATABASE_PORT")
+                .help("db port")
+                .takes_value(true),
+        )
         .get_matches();
     let config = ServerConfig::from(arg_matches);
 
-    let mut db_config = Config::new();
-    // TODO: Get creds from arguments
-    db_config.host(config.sql_config.sql_domain);
-    let auth = AuthMethod::sql_server(config.sql_config.sql_user, config.sql_config.sql_pass);
-    db_config.authentication(auth);
-    db_config.trust_cert();
-    db_config.database(config.sql_config.sql_database);
+    let db_config = Config {
+        auth: Auth::Sql {
+            user: config.sql_config.sql_user,
+            pass: config.sql_config.sql_pass,
+        },
+        database: Some(config.sql_config.sql_database),
+        host: config.sql_config.sql_domain,
+        port: config.sql_config.sql_port,
+        trust_cert: true,
+    };
 
     // TODO: Connection pooling with deadpool? or just Arc<Waifuims>
     let config_copy = db_config.clone();

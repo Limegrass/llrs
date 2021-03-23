@@ -911,7 +911,6 @@ dependencies = [
  "log",
  "nameof",
  "serde",
- "tiberius",
  "tokio",
  "warp",
 ]
