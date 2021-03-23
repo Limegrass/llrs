@@ -3,9 +3,10 @@ use std::cmp::Ordering;
 use async_trait::async_trait;
 use chrono::NaiveDateTime;
 use futures::{AsyncRead, AsyncWrite};
+use log::warn;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tiberius::{Client, Config};
+use tiberius::{AuthMethod, Client, Config as SqlSrvConfig};
 use tokio::net::TcpStream;
 use tokio_util::compat::{Compat, TokioAsyncWriteCompatExt};
 
@@ -74,12 +75,63 @@ impl From<tiberius::error::Error> for Error {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub auth: Auth,
+    pub database: Option<String>,
+    pub host: String,
+    pub port: Option<u16>,
+    pub trust_cert: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum Auth {
+    Sql { user: String, pass: String },
+}
+
+impl From<Config> for SqlSrvConfig {
+    fn from(cfg: Config) -> Self {
+        let mut sql_cfg = SqlSrvConfig::new();
+        sql_cfg.host(&cfg.host);
+        let auth = match cfg.auth {
+            Auth::Sql { user, pass } => {
+                AuthMethod::sql_server(format!("{}@{}", user, &cfg.host), pass)
+            }
+        };
+        sql_cfg.authentication(auth);
+        if let Some(port) = cfg.port {
+            sql_cfg.port(port);
+        }
+        if let Some(db) = cfg.database {
+            sql_cfg.database(db);
+        }
+        if cfg.trust_cert {
+            sql_cfg.trust_cert();
+        }
+        sql_cfg
+    }
+}
+
 // TODO: Maybe remove the strong typing
 impl Waifusims<Compat<TcpStream>> {
     pub async fn new(config: Config) -> Result<Waifusims<Compat<TcpStream>>> {
-        let tcp = TcpStream::connect(config.get_addr()).await?;
+        let sql_cfg = SqlSrvConfig::from(config);
+        let tcp = TcpStream::connect(sql_cfg.get_addr()).await?;
         tcp.set_nodelay(true)?;
-        let client = Client::connect(config, tcp.compat_write()).await?;
+        // Clone the user/pass since they aren't visible
+        let client = match Client::connect(sql_cfg.clone(), tcp.compat_write()).await {
+            Ok(client) => client,
+            Err(tiberius::error::Error::Routing { host, port }) => {
+                let mut sql_cfg = SqlSrvConfig::from(sql_cfg);
+                warn!("Rerouting to {}:{}", host, port);
+                sql_cfg.host(&host);
+                sql_cfg.port(port);
+                let rerouted_connection = TcpStream::connect(sql_cfg.get_addr()).await?;
+                rerouted_connection.set_nodelay(true)?;
+                Client::connect(sql_cfg.clone(), rerouted_connection.compat_write()).await?
+            }
+            Err(err) => Err(Error::Tiberius(err))?,
+        };
         Ok(Waifusims { client })
     }
 }
