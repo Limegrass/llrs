@@ -32,7 +32,7 @@ $bulma-tr-alt: #282f2f;
 }
 
 .back-pager {
-    cursor: w-resize;
+    cursor: url('static/arrow-thick-to-left.svg'), auto;
     position: absolute;
     width: 45%;
     height: 100%;
@@ -40,7 +40,7 @@ $bulma-tr-alt: #282f2f;
 }
 
 .forward-pager {
-    cursor: e-resize;
+    cursor: url('static/arrow-thick-to-right.svg'), auto;
     position: absolute;
     left: 45%;
     width: 55%;
